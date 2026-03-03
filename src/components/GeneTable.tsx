@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowUpDown, Search, ExternalLink, Shield, Pill, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ type SortKey = "symbol" | "role" | "mean" | "outlierPct";
 type SortDir = "asc" | "desc";
 
 const GeneTable = ({ genes }: GeneTableProps) => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("symbol");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -131,8 +133,11 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                   className={`border-b last:border-0 hover:bg-muted/50 transition-colors ${i % 2 === 0 ? "" : "bg-surface-sunken/50"}`}
                 >
                   <td className="px-4 py-3">
-                    <div>
-                      <span className="gene-symbol text-sm">{gene.symbol}</span>
+                    <div
+                      className="cursor-pointer group"
+                      onClick={() => navigate(`/gene/${gene.symbol}`)}
+                    >
+                      <span className="gene-symbol text-sm group-hover:underline">{gene.symbol}</span>
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 max-w-[240px]">{gene.description.split('.')[0]}</p>
                     </div>
                   </td>

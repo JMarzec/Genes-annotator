@@ -1,15 +1,14 @@
-import { useState } from "react";
 import { Dna, FlaskConical } from "lucide-react";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
 import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
-import type { UploadedData, GeneAnnotation } from "@/data/sampleData";
+import type { UploadedData } from "@/data/sampleData";
+import { useGeneData } from "@/contexts/GeneDataContext";
 
 const Index = () => {
-  const [data, setData] = useState<UploadedData | null>(null);
-  const [annotations, setAnnotations] = useState<GeneAnnotation[]>([]);
+  const { data, annotations, setData, setAnnotations } = useGeneData();
 
   const handleData = (d: UploadedData) => {
     setData(d);
