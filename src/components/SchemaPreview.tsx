@@ -34,9 +34,23 @@ const SchemaPreview = ({ data }: SchemaPreviewProps) => {
           <div className="text-xs text-muted-foreground mt-1">Expression rows</div>
         </div>
       </div>
-      <div className="mt-3 text-xs text-muted-foreground">
-        Samples: <span className="font-mono">{sampleKeys.length > 0 ? sampleKeys.join(", ") : "—"}</span>
-      </div>
+      {sampleKeys.length > 0 && (
+        <div className="mt-3 text-xs text-muted-foreground">
+          <span>Samples: </span>
+          {sampleKeys.length <= 10 ? (
+            <span className="font-mono">{sampleKeys.join(", ")}</span>
+          ) : (
+            <details className="inline">
+              <summary className="cursor-pointer text-primary hover:underline inline">
+                {sampleKeys.length} samples — click to expand
+              </summary>
+              <span className="font-mono block mt-1 max-h-32 overflow-y-auto text-[11px] leading-relaxed">
+                {sampleKeys.join(", ")}
+              </span>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 };
