@@ -8,6 +8,39 @@ export interface UploadedData {
   expressions: GeneExpression[];
 }
 
+// Alternate format: expressions as { gene, samples: [{ sampleId, value }] }
+interface AltExpression {
+  gene: string;
+  samples: { sampleId: string; value: number; [key: string]: unknown }[];
+}
+
+interface RawUploadedData {
+  genes: string[];
+  expressions: (GeneExpression | AltExpression)[];
+  [key: string]: unknown;
+}
+
+export function normalizeUploadedData(raw: RawUploadedData): UploadedData {
+  const expressions: GeneExpression[] = raw.expressions.map((expr) => {
+    // Already in { gene, values } format
+    if ('values' in expr && typeof expr.values === 'object' && expr.values !== null) {
+      return expr as GeneExpression;
+    }
+    // Alternate { gene, samples: [{ sampleId, value }] } format
+    if ('samples' in expr && Array.isArray((expr as AltExpression).samples)) {
+      const alt = expr as AltExpression;
+      const values: Record<string, number> = {};
+      alt.samples.forEach((s) => {
+        values[s.sampleId] = s.value;
+      });
+      return { gene: alt.gene, values };
+    }
+    // Fallback: empty values
+    return { gene: (expr as any).gene ?? 'unknown', values: {} };
+  });
+  return { genes: raw.genes, expressions };
+}
+
 export type GeneRole = "Oncogene" | "Tumor Suppressor" | "Kinase" | "DNA Repair" | "TF" | "Immune" | "Unknown";
 
 export interface GeneAnnotation {

@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Upload, FileJson, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { normalizeUploadedData } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 
 interface UploadAreaProps {
@@ -29,7 +30,8 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
           setError("JSON must contain an 'expressions' array.");
           return;
         }
-        onDataLoaded(json as UploadedData);
+        const normalized = normalizeUploadedData(json);
+        onDataLoaded(normalized);
       } catch {
         setError("Invalid JSON file. Please check the format.");
       }
