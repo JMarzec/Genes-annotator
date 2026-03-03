@@ -81,6 +81,18 @@ const Index = () => {
           </div>
         )}
       </main>
+
+      <footer className="border-t py-4 text-center text-xs text-muted-foreground">
+        Powered by{" "}
+        <a
+          href="https://accelbio.pt/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-primary hover:underline"
+        >
+          AccelBio
+        </a>
+      </footer>
     </div>
   );
 };

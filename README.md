@@ -193,4 +193,8 @@ EGFR    7.8       12.3      6.5
 
 ## 📄 License
 
-This project is for research and educational use. See repository for license details.
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 🔗 Powered by [AccelBio](https://accelbio.pt/)
