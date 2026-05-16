@@ -4,7 +4,25 @@
 export interface LiveSignals {
   civicEvidenceCount: number;
   dgidbDrugs: string[];
+  entrezId?: string;
+  fullName?: string;
+  description?: string;
+  dgidbCategories?: string[];
+  inferredRole?: "Oncogene" | "Tumor Suppressor" | "Kinase" | "DNA Repair" | "TF" | "Immune" | "Unknown";
   fetched: boolean;
+}
+
+interface CivicGeneSignal {
+  evidenceCount: number;
+  entrezId?: string;
+  fullName?: string;
+  description?: string;
+}
+
+interface DgidbGeneSignal {
+  drugs: string[];
+  longName?: string;
+  categories: string[];
 }
 
 const CIVIC_URL = "https://civicdb.org/api/graphql";
@@ -29,16 +47,34 @@ async function gql<T>(url: string, query: string, variables?: Record<string, unk
   return json.data as T;
 }
 
-export async function fetchCivicCounts(symbols: string[]): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  const q = `query ($s: [String!]) { genes(entrezSymbols: $s, first: 200) { nodes { name stats { evidenceItemCount } } } }`;
+const inferRole = (text: string): LiveSignals["inferredRole"] => {
+  const t = text.toLowerCase();
+  if (/kinase|tyrosine kinase|serine\/threonine/.test(t)) return "Kinase";
+  if (/dna repair|homologous recombination|mismatch repair|repair associated|brca/.test(t)) return "DNA Repair";
+  if (/immune|cytokine|chemokine|interleukin|hla|antigen presentation/.test(t)) return "Immune";
+  if (/transcription factor|transcriptional regulator|bhlh|zinc finger/.test(t)) return "TF";
+  if (/tumou?r suppressor|loss-of-function|caretaker gene|gatekeeper gene/.test(t)) return "Tumor Suppressor";
+  if (/oncogene|proto-oncogene|driver gene|gain-of-function/.test(t)) return "Oncogene";
+  return "Unknown";
+};
+
+export async function fetchCivicGeneSignals(symbols: string[]): Promise<Map<string, CivicGeneSignal>> {
+  const map = new Map<string, CivicGeneSignal>();
+  const q = `query ($s: [String!]) { genes(entrezSymbols: $s, first: 200) { nodes { name fullName description entrezId stats { evidenceItemCount } } } }`;
   await Promise.all(
     chunk(symbols, CHUNK).map(async (batch) => {
       try {
-        const data = await gql<{ genes: { nodes: { name: string; stats: { evidenceItemCount: number } }[] } }>(
+        const data = await gql<{ genes: { nodes: { name: string; fullName?: string; description?: string; entrezId?: number; stats: { evidenceItemCount: number } }[] } }>(
           CIVIC_URL, q, { s: batch }
         );
-        for (const n of data.genes.nodes) map.set(n.name.toUpperCase(), n.stats.evidenceItemCount);
+        for (const n of data.genes.nodes) {
+          map.set(n.name.toUpperCase(), {
+            evidenceCount: n.stats.evidenceItemCount,
+            entrezId: n.entrezId ? String(n.entrezId) : undefined,
+            fullName: n.fullName,
+            description: n.description,
+          });
+        }
       } catch (e) {
         console.warn("CIViC batch failed", e);
       }
@@ -47,18 +83,26 @@ export async function fetchCivicCounts(symbols: string[]): Promise<Map<string, n
   return map;
 }
 
-export async function fetchDgidbDrugs(symbols: string[]): Promise<Map<string, string[]>> {
-  const map = new Map<string, string[]>();
-  const q = `query ($n: [String!]!) { genes(names: $n) { nodes { name interactions { drug { name } } } } }`;
+export async function fetchCivicCounts(symbols: string[]): Promise<Map<string, number>> {
+  const signals = await fetchCivicGeneSignals(symbols);
+  const map = new Map<string, number>();
+  signals.forEach((value, key) => map.set(key, value.evidenceCount));
+  return map;
+}
+
+export async function fetchDgidbGeneSignals(symbols: string[]): Promise<Map<string, DgidbGeneSignal>> {
+  const map = new Map<string, DgidbGeneSignal>();
+  const q = `query ($n: [String!]!) { genes(names: $n) { nodes { name longName geneCategories { name } interactions { drug { name } } } } }`;
   await Promise.all(
     chunk(symbols, CHUNK).map(async (batch) => {
       try {
-        const data = await gql<{ genes: { nodes: { name: string; interactions: { drug: { name: string } }[] }[] } }>(
+        const data = await gql<{ genes: { nodes: { name: string; longName?: string; geneCategories: { name: string }[]; interactions: { drug: { name: string } }[] }[] } }>(
           DGIDB_URL, q, { n: batch }
         );
         for (const n of data.genes.nodes) {
           const drugs = Array.from(new Set(n.interactions.map((i) => i.drug.name).filter(Boolean)));
-          map.set(n.name.toUpperCase(), drugs);
+          const categories = Array.from(new Set(n.geneCategories.map((c) => c.name).filter(Boolean)));
+          map.set(n.name.toUpperCase(), { drugs, longName: n.longName, categories });
         }
       } catch (e) {
         console.warn("DGIdb batch failed", e);
@@ -68,14 +112,29 @@ export async function fetchDgidbDrugs(symbols: string[]): Promise<Map<string, st
   return map;
 }
 
+export async function fetchDgidbDrugs(symbols: string[]): Promise<Map<string, string[]>> {
+  const signals = await fetchDgidbGeneSignals(symbols);
+  const map = new Map<string, string[]>();
+  signals.forEach((value, key) => map.set(key, value.drugs));
+  return map;
+}
+
 export async function fetchLiveSignals(symbols: string[]): Promise<Map<string, LiveSignals>> {
-  const [civic, dgidb] = await Promise.all([fetchCivicCounts(symbols), fetchDgidbDrugs(symbols)]);
+  const [civic, dgidb] = await Promise.all([fetchCivicGeneSignals(symbols), fetchDgidbGeneSignals(symbols)]);
   const out = new Map<string, LiveSignals>();
   for (const s of symbols) {
     const key = s.toUpperCase();
+    const civicSignal = civic.get(key);
+    const dgidbSignal = dgidb.get(key);
+    const roleText = [civicSignal?.fullName, civicSignal?.description, dgidbSignal?.longName, ...(dgidbSignal?.categories ?? [])].join(" ");
     out.set(key, {
-      civicEvidenceCount: civic.get(key) ?? 0,
-      dgidbDrugs: dgidb.get(key) ?? [],
+      civicEvidenceCount: civicSignal?.evidenceCount ?? 0,
+      dgidbDrugs: dgidbSignal?.drugs ?? [],
+      entrezId: civicSignal?.entrezId,
+      fullName: civicSignal?.fullName ?? dgidbSignal?.longName,
+      description: civicSignal?.description,
+      dgidbCategories: dgidbSignal?.categories ?? [],
+      inferredRole: inferRole(roleText),
       fetched: true,
     });
   }
