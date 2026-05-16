@@ -23,9 +23,18 @@ const Index = () => {
       const merged = annotated.map((a) => {
         const s = live.get(a.symbol.toUpperCase());
         if (!s) return { ...a, liveFetched: true };
+        const liveDescription = s.description
+          ? `${s.fullName ? `${s.fullName}. ` : ""}${s.description}`
+          : s.fullName;
         return {
           ...a,
           liveFetched: true,
+          entrezId: a.entrezId !== "—" ? a.entrezId : s.entrezId ?? a.entrezId,
+          role: a.role !== "Unknown" ? a.role : s.inferredRole ?? a.role,
+          description: a.description !== "No annotation available." ? a.description : liveDescription ?? a.description,
+          cancerRelevance: a.cancerRelevance !== "Unknown"
+            ? a.cancerRelevance
+            : s.description ?? (s.civicEvidenceCount > 0 ? `${a.symbol} has curated clinical evidence in CIViC.` : a.cancerRelevance),
           civicEvidenceCount: s.civicEvidenceCount,
           dgidbDrugs: s.dgidbDrugs,
           civicEvidence: s.civicEvidenceCount > 0 || a.civicEvidence,
