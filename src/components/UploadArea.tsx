@@ -15,18 +15,35 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
   const [fileName, setFileName] = useState<string | null>(null);
 
   const parseGeneList = (text: string): string[] => {
-    // Split by lines, commas, tabs, or semicolons; strip quotes/whitespace
-    const tokens = text
-      .split(/[\r\n,;\t]+/)
-      .map((t) => t.trim().replace(/^["']|["']$/g, ""))
-      .filter((t) => t.length > 0);
-    // Filter: valid gene symbols (alphanumeric + - . _), max 20 chars, dedupe, skip common headers
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    if (lines.length === 0) return [];
+
+    // Detect delimiter from first line
+    const first = lines[0];
+    const delim = first.includes("\t") ? "\t" : first.includes(",") ? "," : first.includes(";") ? ";" : null;
+
+    // Determine which column holds gene symbols
+    let geneCol = 0;
+    let startIdx = 0;
+    if (delim) {
+      const headerCells = first.split(delim).map((c) => c.trim().replace(/^["']|["']$/g, "").toLowerCase());
+      const headerHit = headerCells.findIndex((c) =>
+        ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol"].includes(c)
+      );
+      // Treat first row as header if any cell is a known header label
+      const looksLikeHeader = headerCells.some((c) =>
+        ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol"].includes(c)
+      );
+      if (headerHit >= 0) geneCol = headerHit;
+      if (looksLikeHeader) startIdx = 1;
+    }
+
     const seen = new Set<string>();
-    const headers = new Set(["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc"]);
     const result: string[] = [];
-    for (const t of tokens) {
-      if (t.length > 20 || !/^[A-Za-z0-9._-]+$/.test(t)) continue;
-      if (headers.has(t.toLowerCase())) continue;
+    for (let i = startIdx; i < lines.length; i++) {
+      const raw = delim ? (lines[i].split(delim)[geneCol] ?? "") : lines[i];
+      const t = raw.trim().replace(/^["']|["']$/g, "");
+      if (!t || t.length > 20 || !/^[A-Za-z0-9._-]+$/.test(t)) continue;
       const upper = t.toUpperCase();
       if (seen.has(upper)) continue;
       seen.add(upper);
