@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { ArrowLeft, Dna, FlaskConical, ExternalLink, Shield, Pill, Activity, TrendingUp, BarChart3, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
