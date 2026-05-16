@@ -1,0 +1,13 @@
+# OncoGene Annotator
+
+> Browser-based dashboard for annotating cancer genes with clinical evidence, druggability, and expression context. Researchers upload a JSON of gene expression data and get back identifier mapping, role classification, CIViC/DGIdb signals, and per-sample expression visualizations.
+
+OncoGene Annotator runs entirely in the browser — no data is uploaded to any server. It is intended for research use only and is powered by AccelBio (https://accelbio.pt/).
+
+## Pages
+
+- [Dashboard](/): Upload a JSON gene expression file (or load the demo dataset) to annotate genes, browse the gene list, and build CSV/JSON reports.
+
+## Optional
+
+- [Gene Detail](/gene/:symbol): Per-gene view with Summary, Clinical Evidence, Druggability, and Expression Context tabs. Available after a dataset is loaded.

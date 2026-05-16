@@ -174,10 +174,10 @@ const ReportBuilder = () => {
       {/* Gene selection grid */}
       <div className="surface-card overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b bg-surface-sunken">
-          <Checkbox checked={allFilteredSelected} onCheckedChange={toggleAll} />
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <Checkbox id="report-select-all" checked={allFilteredSelected} onCheckedChange={toggleAll} aria-label="Select all filtered genes" />
+          <label htmlFor="report-select-all" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer">
             {allFilteredSelected ? "Deselect all" : "Select all"}
-          </span>
+          </label>
         </div>
         <div className="max-h-[320px] overflow-y-auto divide-y divide-border">
           {filtered.map(gene => (
