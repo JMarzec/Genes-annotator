@@ -1,4 +1,4 @@
-import { Dna, FlaskConical, FileText } from "lucide-react";
+import { Dna, FlaskConical, FileText, Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
@@ -8,13 +8,34 @@ import ReportBuilder from "@/components/ReportBuilder";
 import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 import { useGeneData } from "@/contexts/GeneDataContext";
+import { fetchLiveSignals } from "@/lib/geneApis";
 
 const Index = () => {
-  const { data, annotations, setData, setAnnotations } = useGeneData();
+  const { data, annotations, liveLoading, setData, setAnnotations, setLiveLoading } = useGeneData();
 
-  const handleData = (d: UploadedData) => {
+  const handleData = async (d: UploadedData) => {
     setData(d);
-    setAnnotations(annotateGenes(d));
+    const annotated = annotateGenes(d);
+    setAnnotations(annotated);
+    setLiveLoading(true);
+    try {
+      const live = await fetchLiveSignals(annotated.map((a) => a.symbol));
+      const merged = annotated.map((a) => {
+        const s = live.get(a.symbol.toUpperCase());
+        if (!s) return { ...a, liveFetched: true };
+        return {
+          ...a,
+          liveFetched: true,
+          civicEvidenceCount: s.civicEvidenceCount,
+          dgidbDrugs: s.dgidbDrugs,
+          civicEvidence: s.civicEvidenceCount > 0 || a.civicEvidence,
+          dgidbInteractions: s.dgidbDrugs.length > 0 || a.dgidbInteractions,
+        };
+      });
+      setAnnotations(merged);
+    } finally {
+      setLiveLoading(false);
+    }
   };
 
   const loadDemo = () => handleData(SAMPLE_DATA);
@@ -69,12 +90,20 @@ const Index = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h1 className="text-xl font-bold text-foreground">Gene List Overview — Annotated Cancer Genes</h1>
-                <button
-                  onClick={() => { setData(null); setAnnotations([]); }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
-                >
-                  Upload new file
-                </button>
+                <div className="flex items-center gap-3">
+                  {liveLoading && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Fetching CIViC + DGIdb…
+                    </span>
+                  )}
+                  <button
+                    onClick={() => { setData(null); setAnnotations([]); }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                  >
+                    Upload new file
+                  </button>
+                </div>
               </div>
               <GeneTable genes={annotations} />
             </div>
