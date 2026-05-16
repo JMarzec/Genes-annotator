@@ -107,48 +107,54 @@ const ClinicalEvidenceTab = ({ gene }: { gene: GeneAnnotation }) => (
     </div>
 
     <div className="surface-card p-6">
-      <h3 className="text-sm font-semibold text-foreground mb-4">Evidence Databases</h3>
+      <h3 className="text-sm font-semibold text-foreground mb-4">Evidence Databases (live)</h3>
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className={`rounded-lg border p-4 ${gene.civicEvidence ? "border-info/30 bg-info/5" : "border-border bg-muted/30"}`}>
+        <div className={`rounded-lg border p-4 ${(gene.civicEvidenceCount ?? 0) > 0 ? "border-info/30 bg-info/5" : "border-border bg-muted/30"}`}>
           <div className="flex items-center gap-2 mb-2">
-            <Shield className={`h-4 w-4 ${gene.civicEvidence ? "text-info" : "text-muted-foreground"}`} />
+            <Shield className={`h-4 w-4 ${(gene.civicEvidenceCount ?? 0) > 0 ? "text-info" : "text-muted-foreground"}`} />
             <span className="text-sm font-semibold">CIViC</span>
-            <span className={`ml-auto data-chip ${gene.civicEvidence ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"}`}>
-              {gene.civicEvidence ? "Evidence Found" : "No Data"}
+            <span className={`ml-auto data-chip ${(gene.civicEvidenceCount ?? 0) > 0 ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"}`}>
+              {gene.liveFetched ? `${gene.civicEvidenceCount ?? 0} evidence items` : (gene.civicEvidence ? "Curated" : "—")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">Clinical Interpretation of Variants in Cancer</p>
-          {gene.civicEvidence && (
-            <a
-              href={`https://civicdb.org/links/entrez_name/${gene.symbol}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-info hover:underline mt-2"
-            >
-              View in CIViC <ExternalLink className="h-3 w-3" />
-            </a>
-          )}
+          <a
+            href={`https://civicdb.org/links/entrez_name/${gene.symbol}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-info hover:underline mt-2"
+          >
+            View in CIViC <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
 
-        <div className={`rounded-lg border p-4 ${gene.dgidbInteractions ? "border-accent/30 bg-accent/5" : "border-border bg-muted/30"}`}>
+        <div className={`rounded-lg border p-4 ${(gene.dgidbDrugs?.length ?? 0) > 0 ? "border-accent/30 bg-accent/5" : "border-border bg-muted/30"}`}>
           <div className="flex items-center gap-2 mb-2">
-            <Pill className={`h-4 w-4 ${gene.dgidbInteractions ? "text-accent" : "text-muted-foreground"}`} />
+            <Pill className={`h-4 w-4 ${(gene.dgidbDrugs?.length ?? 0) > 0 ? "text-accent" : "text-muted-foreground"}`} />
             <span className="text-sm font-semibold">DGIdb</span>
-            <span className={`ml-auto data-chip ${gene.dgidbInteractions ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"}`}>
-              {gene.dgidbInteractions ? "Interactions Found" : "No Data"}
+            <span className={`ml-auto data-chip ${(gene.dgidbDrugs?.length ?? 0) > 0 ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"}`}>
+              {gene.liveFetched ? `${gene.dgidbDrugs?.length ?? 0} drugs` : (gene.dgidbInteractions ? "Curated" : "—")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">Drug Gene Interaction Database</p>
-          {gene.dgidbInteractions && (
-            <a
-              href={`https://www.dgidb.org/genes/${gene.symbol}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-2"
-            >
-              View in DGIdb <ExternalLink className="h-3 w-3" />
-            </a>
+          {(gene.dgidbDrugs?.length ?? 0) > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+              {gene.dgidbDrugs!.slice(0, 24).map((d) => (
+                <span key={d} className="data-chip bg-accent/10 text-accent text-[10px] font-mono">{d}</span>
+              ))}
+              {gene.dgidbDrugs!.length > 24 && (
+                <span className="text-[10px] text-muted-foreground">+{gene.dgidbDrugs!.length - 24} more</span>
+              )}
+            </div>
           )}
+          <a
+            href={`https://www.dgidb.org/genes/${gene.symbol}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-2"
+          >
+            View in DGIdb <ExternalLink className="h-3 w-3" />
+          </a>
         </div>
       </div>
     </div>
