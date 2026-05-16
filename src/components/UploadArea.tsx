@@ -93,18 +93,18 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
         onDrop={handleDrop}
         onClick={() => document.getElementById("file-input")?.click()}
       >
-        <label htmlFor="file-input" className="sr-only">Upload gene expression JSON file</label>
-        <input id="file-input" type="file" accept=".json" className="hidden" onChange={handleFileInput} aria-label="Upload gene expression JSON file" />
+        <label htmlFor="file-input" className="sr-only">Upload gene expression JSON or gene list (TXT/CSV) file</label>
+        <input id="file-input" type="file" accept=".json,.txt,.csv,.tsv,text/plain,text/csv" className="hidden" onChange={handleFileInput} aria-label="Upload gene expression JSON or gene list file" />
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <Upload className="h-6 w-6 text-primary" />
           </div>
           <div>
             <p className="text-base font-medium text-foreground">
-              Drop your JSON file here or click to browse
+              Drop your file here or click to browse
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Expected: <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{"{ genes: [...], expressions: [...] }"}</code>
+              <span className="font-medium">JSON</span> with expression data, or <span className="font-medium">TXT/CSV</span> with one gene symbol per line
             </p>
           </div>
         </div>
