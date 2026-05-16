@@ -1,4 +1,5 @@
 import { Dna, FlaskConical, FileText } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
 import SchemaPreview from "@/components/SchemaPreview";
@@ -20,6 +21,13 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>OncoGene Annotator — Cancer Gene Annotation Dashboard</title>
+        <meta name="description" content="Upload gene expression JSON to annotate cancer genes with clinical evidence, druggability signals, and per-sample expression context." />
+        <meta property="og:title" content="OncoGene Annotator — Cancer Gene Annotation Dashboard" />
+        <meta property="og:description" content="Upload gene expression JSON to annotate cancer genes with clinical evidence, druggability signals, and per-sample expression context." />
+        <link rel="canonical" href="https://accelbio-genes-annotator.lovable.app/" />
+      </Helmet>
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container max-w-6xl py-4 flex items-center justify-between">
@@ -28,7 +36,7 @@ const Index = () => {
               <Dna className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</h1>
+              <div className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</div>
               <p className="text-xs text-muted-foreground">Cancer Gene Annotation Dashboard</p>
             </div>
           </div>
