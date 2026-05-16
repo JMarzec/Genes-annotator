@@ -153,16 +153,39 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                     </span>
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
-                    <div className="flex gap-1.5">
-                      {gene.civicEvidence && (
-                        <span className="data-chip bg-info/15 text-info" title="CIViC evidence available">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(gene.civicEvidenceCount ?? 0) > 0 ? (
+                        <a
+                          href={`https://civicdb.org/links/entrez_name/${gene.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="data-chip bg-info/15 text-info hover:bg-info/25"
+                          title={`${gene.civicEvidenceCount} CIViC evidence items`}
+                        >
+                          <Shield className="h-3 w-3 mr-1" />CIViC {gene.civicEvidenceCount}
+                        </a>
+                      ) : gene.civicEvidence && (
+                        <span className="data-chip bg-info/15 text-info" title="CIViC evidence (curated)">
                           <Shield className="h-3 w-3 mr-1" />CIViC
                         </span>
                       )}
-                      {gene.dgidbInteractions && (
-                        <span className="data-chip bg-accent/15 text-accent" title="Drug interactions found">
+                      {(gene.dgidbDrugs?.length ?? 0) > 0 ? (
+                        <a
+                          href={`https://www.dgidb.org/genes/${gene.symbol}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="data-chip bg-accent/15 text-accent hover:bg-accent/25"
+                          title={gene.dgidbDrugs!.slice(0, 10).join(", ") + (gene.dgidbDrugs!.length > 10 ? "…" : "")}
+                        >
+                          <Pill className="h-3 w-3 mr-1" />{gene.dgidbDrugs!.length} drugs
+                        </a>
+                      ) : gene.dgidbInteractions && (
+                        <span className="data-chip bg-accent/15 text-accent" title="DGIdb interactions (curated)">
                           <Pill className="h-3 w-3 mr-1" />DGIdb
                         </span>
+                      )}
+                      {gene.liveFetched && !gene.civicEvidenceCount && !gene.dgidbDrugs?.length && (
+                        <span className="text-xs text-muted-foreground">No signals</span>
                       )}
                     </div>
                   </td>
