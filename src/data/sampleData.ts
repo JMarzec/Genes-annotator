@@ -52,6 +52,10 @@ export interface GeneAnnotation {
   cancerRelevance: string;
   civicEvidence: boolean;
   dgidbInteractions: boolean;
+  // Live-fetched signals (CIViC + DGIdb). Populated asynchronously after upload.
+  civicEvidenceCount?: number;
+  dgidbDrugs?: string[];
+  liveFetched?: boolean;
   expressionStats?: {
     mean: number;
     median: number;
