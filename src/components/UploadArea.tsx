@@ -60,7 +60,8 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
         onDrop={handleDrop}
         onClick={() => document.getElementById("file-input")?.click()}
       >
-        <input id="file-input" type="file" accept=".json" className="hidden" onChange={handleFileInput} />
+        <label htmlFor="file-input" className="sr-only">Upload gene expression JSON file</label>
+        <input id="file-input" type="file" accept=".json" className="hidden" onChange={handleFileInput} aria-label="Upload gene expression JSON file" />
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <Upload className="h-6 w-6 text-primary" />

@@ -183,7 +183,8 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-muted-foreground hover:text-primary transition-colors"
-                        title="GeneCards"
+                        title={`View ${gene.symbol} on GeneCards`}
+                        aria-label={`View ${gene.symbol} on GeneCards (opens in new tab)`}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
