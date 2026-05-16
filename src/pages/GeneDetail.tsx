@@ -292,13 +292,13 @@ const GeneDetail = () => {
               <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
                 <Dna className="h-5 w-5 text-primary-foreground" />
               </div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</h1>
+              <div className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</div>
             </div>
           </div>
         </header>
         <main className="container max-w-6xl py-16 text-center">
           <Dna className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-          <h2 className="text-xl font-bold text-foreground mb-2">Gene Not Found</h2>
+          <h1 className="text-xl font-bold text-foreground mb-2">Gene "{symbol}" Not Found — OncoGene Annotator</h1>
           <p className="text-sm text-muted-foreground mb-6">
             No annotation data for "<span className="font-mono">{symbol}</span>". Load a dataset first.
           </p>
@@ -312,6 +312,13 @@ const GeneDetail = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{`${gene.symbol} (${gene.role}) — Gene Details · OncoGene Annotator`}</title>
+        <meta name="description" content={`${gene.symbol}: ${gene.description.split('.')[0]}. Cancer relevance, clinical evidence, druggability, and expression context.`.slice(0, 158)} />
+        <meta property="og:title" content={`${gene.symbol} — Gene Details · OncoGene Annotator`} />
+        <meta property="og:description" content={`${gene.symbol}: ${gene.description.split('.')[0]}.`.slice(0, 158)} />
+        <link rel="canonical" href={`https://accelbio-genes-annotator.lovable.app/gene/${gene.symbol}`} />
+      </Helmet>
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container max-w-6xl py-4 flex items-center justify-between">
@@ -320,7 +327,7 @@ const GeneDetail = () => {
               <Dna className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</h1>
+              <div className="text-lg font-bold text-foreground tracking-tight">OncoGene Annotator</div>
               <p className="text-xs text-muted-foreground">Cancer Gene Annotation Dashboard</p>
             </div>
           </div>
@@ -345,7 +352,7 @@ const GeneDetail = () => {
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold gene-symbol">{gene.symbol}</h2>
+              <h1 className="text-2xl font-bold gene-symbol">{gene.symbol} — {gene.role}</h1>
               <span className={`data-chip ${ROLE_STYLES[gene.role]}`}>{gene.role}</span>
             </div>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{gene.description.split('.')[0]}.</p>
