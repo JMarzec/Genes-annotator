@@ -90,12 +90,20 @@ const Index = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h1 className="text-xl font-bold text-foreground">Gene List Overview — Annotated Cancer Genes</h1>
-                <button
-                  onClick={() => { setData(null); setAnnotations([]); }}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
-                >
-                  Upload new file
-                </button>
+                <div className="flex items-center gap-3">
+                  {liveLoading && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Fetching CIViC + DGIdb…
+                    </span>
+                  )}
+                  <button
+                    onClick={() => { setData(null); setAnnotations([]); }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                  >
+                    Upload new file
+                  </button>
+                </div>
               </div>
               <GeneTable genes={annotations} />
             </div>
