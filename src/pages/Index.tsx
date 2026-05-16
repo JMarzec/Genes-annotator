@@ -54,7 +54,7 @@ const Index = () => {
         {!data ? (
           <div className="max-w-lg mx-auto py-12">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-foreground">Upload Gene Expression Data</h2>
+              <h1 className="text-2xl font-bold text-foreground">Upload Gene Expression Data — OncoGene Annotator</h1>
               <p className="text-muted-foreground mt-2 text-sm">
                 Upload a JSON file with genes and expression data to get cancer-focused annotations,
                 identifier mapping, and actionability signals.
@@ -68,7 +68,7 @@ const Index = () => {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-foreground">Gene List Overview</h2>
+                <h1 className="text-xl font-bold text-foreground">Gene List Overview — Annotated Cancer Genes</h1>
                 <button
                   onClick={() => { setData(null); setAnnotations([]); }}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
