@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Upload, FileJson, CheckCircle2 } from "lucide-react";
+import { Upload, FileJson, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { normalizeUploadedData } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
@@ -9,51 +9,124 @@ interface UploadAreaProps {
   onLoadDemo: () => void;
 }
 
+interface ParseResult {
+  genes: string[];
+  warnings: string[];
+  info: string[];
+}
+
+const HEADER_LABELS = ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol", "gene_name"];
+const SYMBOL_RE = /^[A-Za-z0-9._-]+$/;
+
+const isValidSymbol = (t: string) => !!t && t.length <= 20 && SYMBOL_RE.test(t);
+
+const parseGeneList = (text: string): ParseResult => {
+  const warnings: string[] = [];
+  const info: string[] = [];
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info };
+
+  const sample = lines.slice(0, Math.min(5, lines.length)).join("\n");
+  const counts: Record<string, number> = {
+    "\t": (sample.match(/\t/g) || []).length,
+    ",": (sample.match(/,/g) || []).length,
+    ";": (sample.match(/;/g) || []).length,
+  };
+  let delim: string | null = null;
+  if (counts["\t"] > 0) delim = "\t";
+  else if (counts[","] > 0) delim = ",";
+  else if (counts[";"] > 0) delim = ";";
+
+  let geneCol = 0;
+  let startIdx = 0;
+  let detectedBy = "single column";
+
+  if (delim) {
+    const headerCells = lines[0].split(delim).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+    const headerLower = headerCells.map((c) => c.toLowerCase());
+    const headerHit = headerLower.findIndex((c) => HEADER_LABELS.includes(c));
+    const looksLikeHeader = headerHit >= 0 || headerLower.every((c) => !isValidSymbol(c));
+
+    if (headerHit >= 0) {
+      geneCol = headerHit;
+      startIdx = 1;
+      detectedBy = `header "${headerCells[headerHit]}" (column ${headerHit + 1})`;
+    } else {
+      const dataLines = looksLikeHeader ? lines.slice(1) : lines;
+      const colCount = lines[0].split(delim).length;
+      let bestCol = 0;
+      let bestScore = -1;
+      for (let c = 0; c < colCount; c++) {
+        const valid = dataLines.filter((l) =>
+          isValidSymbol((l.split(delim!)[c] ?? "").trim().replace(/^["']|["']$/g, ""))
+        ).length;
+        if (valid > bestScore) { bestScore = valid; bestCol = c; }
+      }
+      geneCol = bestCol;
+      startIdx = looksLikeHeader ? 1 : 0;
+      detectedBy = `auto-detected column ${bestCol + 1} (no recognized header)`;
+      if (!looksLikeHeader) warnings.push("No header row detected — first row treated as data.");
+    }
+
+    info.push(
+      `Delimiter: ${delim === "\t" ? "TAB" : delim === "," ? "comma" : "semicolon"}. Gene column: ${detectedBy}.`
+    );
+
+    const colCount = lines[0].split(delim).length;
+    if (colCount > 1) {
+      const dataLines = lines.slice(startIdx);
+      const scores = Array.from({ length: colCount }, (_, c) =>
+        dataLines.filter((l) =>
+          isValidSymbol((l.split(delim!)[c] ?? "").trim().replace(/^["']|["']$/g, ""))
+        ).length
+      );
+      const max = Math.max(...scores);
+      const bestCols = scores.map((s, i) => (s === max ? i : -1)).filter((i) => i >= 0);
+      if (max > scores[geneCol] && bestCols.length === 1) {
+        warnings.push(
+          `Column ${bestCols[0] + 1} has more gene-like values (${max}) than the selected column ${geneCol + 1} (${scores[geneCol]}). Wrong header label?`
+        );
+      }
+    }
+  } else {
+    info.push("Delimiter: none (treating each line as a single gene symbol).");
+  }
+
+  const seen = new Set<string>();
+  const genes: string[] = [];
+  let skipped = 0;
+  for (let i = startIdx; i < lines.length; i++) {
+    const raw = delim ? (lines[i].split(delim)[geneCol] ?? "") : lines[i];
+    const t = raw.trim().replace(/^["']|["']$/g, "");
+    if (!isValidSymbol(t)) { skipped++; continue; }
+    const upper = t.toUpperCase();
+    if (seen.has(upper)) continue;
+    seen.add(upper);
+    genes.push(upper);
+  }
+
+  if (genes.length === 0) {
+    warnings.push("No valid gene symbols found. Check delimiter and column selection.");
+  } else if (skipped > genes.length * 0.3) {
+    warnings.push(
+      `${skipped} rows skipped (not valid HGNC-style symbols). Confirm you selected the right column.`
+    );
+  }
+
+  return { genes, warnings, info };
+};
+
 const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-
-  const parseGeneList = (text: string): string[] => {
-    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-    if (lines.length === 0) return [];
-
-    // Detect delimiter from first line
-    const first = lines[0];
-    const delim = first.includes("\t") ? "\t" : first.includes(",") ? "," : first.includes(";") ? ";" : null;
-
-    // Determine which column holds gene symbols
-    let geneCol = 0;
-    let startIdx = 0;
-    if (delim) {
-      const headerCells = first.split(delim).map((c) => c.trim().replace(/^["']|["']$/g, "").toLowerCase());
-      const headerHit = headerCells.findIndex((c) =>
-        ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol"].includes(c)
-      );
-      // Treat first row as header if any cell is a known header label
-      const looksLikeHeader = headerCells.some((c) =>
-        ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol"].includes(c)
-      );
-      if (headerHit >= 0) geneCol = headerHit;
-      if (looksLikeHeader) startIdx = 1;
-    }
-
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (let i = startIdx; i < lines.length; i++) {
-      const raw = delim ? (lines[i].split(delim)[geneCol] ?? "") : lines[i];
-      const t = raw.trim().replace(/^["']|["']$/g, "");
-      if (!t || t.length > 20 || !/^[A-Za-z0-9._-]+$/.test(t)) continue;
-      const upper = t.toUpperCase();
-      if (seen.has(upper)) continue;
-      seen.add(upper);
-      result.push(upper);
-    }
-    return result;
-  };
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [info, setInfo] = useState<string[]>([]);
 
   const parseFile = useCallback((file: File) => {
     setError(null);
+    setWarnings([]);
+    setInfo([]);
     setFileName(file.name);
     const reader = new FileReader();
     const isJson = file.name.toLowerCase().endsWith(".json");
@@ -75,14 +148,16 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
           setError("Invalid JSON file. Please check the format.");
         }
       } else {
-        const genes = parseGeneList(text);
-        if (genes.length === 0) {
+        const result = parseGeneList(text);
+        setInfo(result.info);
+        setWarnings(result.warnings);
+        if (result.genes.length === 0) {
           setError("No valid gene symbols found in file.");
           return;
         }
         onDataLoaded({
-          genes,
-          expressions: genes.map((g) => ({ gene: g, values: {} })),
+          genes: result.genes,
+          expressions: result.genes.map((g) => ({ gene: g, values: {} })),
         });
       }
     };
@@ -130,6 +205,23 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
       {error && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {info.length > 0 && !error && (
+        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-xs text-foreground space-y-1">
+          {info.map((m, i) => <div key={i}>{m}</div>)}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="bg-warning/10 border border-warning/40 rounded-lg px-4 py-3 text-xs text-foreground space-y-1.5">
+          {warnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-warning" />
+              <span>{w}</span>
+            </div>
+          ))}
         </div>
       )}
 
