@@ -51,6 +51,16 @@ const SchemaPreview = ({ data }: SchemaPreviewProps) => {
           )}
         </div>
       )}
+      <div className="mt-3 text-xs text-muted-foreground">
+        <details open={data.genes.length <= 15}>
+          <summary className="cursor-pointer text-primary hover:underline inline">
+            Parsed genes ({data.genes.length}) — verify the correct column was used
+          </summary>
+          <div className="font-mono block mt-2 max-h-32 overflow-y-auto text-[11px] leading-relaxed bg-surface-sunken rounded p-2">
+            {data.genes.join(", ")}
+          </div>
+        </details>
+      </div>
     </div>
   );
 };
