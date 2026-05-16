@@ -113,34 +113,28 @@ export async function fetchDgidbGeneSignals(symbols: string[]): Promise<Map<stri
 }
 
 export async function fetchDgidbDrugs(symbols: string[]): Promise<Map<string, string[]>> {
+  const signals = await fetchDgidbGeneSignals(symbols);
   const map = new Map<string, string[]>();
-  const q = `query ($n: [String!]!) { genes(names: $n) { nodes { name interactions { drug { name } } } } }`;
-  await Promise.all(
-    chunk(symbols, CHUNK).map(async (batch) => {
-      try {
-        const data = await gql<{ genes: { nodes: { name: string; interactions: { drug: { name: string } }[] }[] } }>(
-          DGIDB_URL, q, { n: batch }
-        );
-        for (const n of data.genes.nodes) {
-          const drugs = Array.from(new Set(n.interactions.map((i) => i.drug.name).filter(Boolean)));
-          map.set(n.name.toUpperCase(), drugs);
-        }
-      } catch (e) {
-        console.warn("DGIdb batch failed", e);
-      }
-    })
-  );
+  signals.forEach((value, key) => map.set(key, value.drugs));
   return map;
 }
 
 export async function fetchLiveSignals(symbols: string[]): Promise<Map<string, LiveSignals>> {
-  const [civic, dgidb] = await Promise.all([fetchCivicCounts(symbols), fetchDgidbDrugs(symbols)]);
+  const [civic, dgidb] = await Promise.all([fetchCivicGeneSignals(symbols), fetchDgidbGeneSignals(symbols)]);
   const out = new Map<string, LiveSignals>();
   for (const s of symbols) {
     const key = s.toUpperCase();
+    const civicSignal = civic.get(key);
+    const dgidbSignal = dgidb.get(key);
+    const roleText = [civicSignal?.fullName, civicSignal?.description, dgidbSignal?.longName, ...(dgidbSignal?.categories ?? [])].join(" ");
     out.set(key, {
-      civicEvidenceCount: civic.get(key) ?? 0,
-      dgidbDrugs: dgidb.get(key) ?? [],
+      civicEvidenceCount: civicSignal?.evidenceCount ?? 0,
+      dgidbDrugs: dgidbSignal?.drugs ?? [],
+      entrezId: civicSignal?.entrezId,
+      fullName: civicSignal?.fullName ?? dgidbSignal?.longName,
+      description: civicSignal?.description,
+      dgidbCategories: dgidbSignal?.categories ?? [],
+      inferredRole: inferRole(roleText),
       fetched: true,
     });
   }
