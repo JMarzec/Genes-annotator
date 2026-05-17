@@ -2,6 +2,7 @@ import { Dna, FlaskConical, FileText, Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
+import ParsedReportedCounter from "@/components/ParsedReportedCounter";
 import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import ReportBuilder from "@/components/ReportBuilder";
