@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Dna, FlaskConical, FileText, Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
@@ -8,13 +9,19 @@ import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import ReportBuilder from "@/components/ReportBuilder";
 import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
-import type { UploadedData } from "@/data/sampleData";
+import type { UploadedData, GeneRole } from "@/data/sampleData";
 import { useGeneData } from "@/contexts/GeneDataContext";
 import { fetchLiveSignals } from "@/lib/geneApis";
 import type { ParseStats } from "@/contexts/GeneDataContext";
 
 const Index = () => {
   const { data, annotations, liveLoading, parseStats, setData, setAnnotations, setLiveLoading, setParseStats } = useGeneData();
+  const [selectedRoles, setSelectedRoles] = useState<GeneRole[]>([]);
+  const toggleRole = (r: GeneRole) =>
+    setSelectedRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  const filteredAnnotations = selectedRoles.length === 0
+    ? annotations
+    : annotations.filter((a) => selectedRoles.includes(a.role));
 
   const handleData = async (d: UploadedData, stats: ParseStats) => {
     setData(d);
