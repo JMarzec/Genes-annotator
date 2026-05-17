@@ -112,6 +112,7 @@ const Index = () => {
               <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
             )}
             <SchemaPreview data={data} />
+            <GeneStats annotations={annotations} />
 
             <div>
               <div className="flex items-center justify-between mb-4">
