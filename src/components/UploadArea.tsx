@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { normalizeUploadedData } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 
+import type { ParseStats } from "@/contexts/GeneDataContext";
+
 interface UploadAreaProps {
-  onDataLoaded: (data: UploadedData) => void;
+  onDataLoaded: (data: UploadedData, stats: ParseStats) => void;
   onLoadDemo: () => void;
 }
 
@@ -13,6 +15,11 @@ interface ParseResult {
   genes: string[];
   warnings: string[];
   info: string[];
+  totalRows: number;
+  duplicates: number;
+  skipped: number;
+  duplicateExamples: string[];
+  skippedExamples: string[];
 }
 
 const HEADER_LABELS = ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol", "gene_name"];
