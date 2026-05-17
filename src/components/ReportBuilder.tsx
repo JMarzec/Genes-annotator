@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Check, Download, FileJson, FileSpreadsheet, Search, X, FileText, ChevronDown } from "lucide-react";
+import { Check, Download, FileJson, FileSpreadsheet, Search, X, FileText, ChevronDown, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
