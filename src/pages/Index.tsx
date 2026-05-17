@@ -123,7 +123,7 @@ const Index = () => {
                     </span>
                   )}
                   <button
-                    onClick={() => { setData(null); setAnnotations([]); }}
+                    onClick={() => { setData(null); setAnnotations([]); setParseStats(null); }}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                   >
                     Upload new file
