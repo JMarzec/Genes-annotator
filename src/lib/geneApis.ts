@@ -5,8 +5,12 @@ export interface LiveSignals {
   civicEvidenceCount: number;
   dgidbDrugs: string[];
   entrezId?: string;
+  ensemblId?: string;
+  officialSymbol?: string;
   fullName?: string;
   description?: string;
+  geneType?: string;
+  metadataFound?: boolean;
   dgidbCategories?: string[];
   inferredRole?: "Oncogene" | "Tumor Suppressor" | "Kinase" | "DNA Repair" | "TF" | "Immune" | "Unknown";
   fetched: boolean;
@@ -25,8 +29,29 @@ interface DgidbGeneSignal {
   categories: string[];
 }
 
+interface GeneMetadataSignal {
+  entrezId?: string;
+  ensemblId?: string;
+  officialSymbol?: string;
+  fullName?: string;
+  description?: string;
+  geneType?: string;
+}
+
+interface MyGeneHit {
+  _score?: number;
+  symbol?: string;
+  name?: string;
+  summary?: string;
+  entrezgene?: string | number;
+  ensembl?: { gene?: string } | { gene?: string }[];
+  type_of_gene?: string;
+  alias?: string | string[];
+}
+
 const CIVIC_URL = "https://civicdb.org/api/graphql";
 const DGIDB_URL = "https://dgidb.org/api/graphql";
+const MYGENE_URL = "https://mygene.info/v3/query";
 const CHUNK = 40;
 
 const chunk = <T,>(arr: T[], size: number): T[][] => {
@@ -119,20 +144,71 @@ export async function fetchDgidbDrugs(symbols: string[]): Promise<Map<string, st
   return map;
 }
 
+const getEnsemblId = (ensembl?: MyGeneHit["ensembl"]): string | undefined => {
+  if (Array.isArray(ensembl)) return ensembl.find((e) => e.gene)?.gene;
+  return ensembl?.gene;
+};
+
+const quoteGeneTerm = (symbol: string) => `"${symbol.replace(/["\\]/g, "").toUpperCase()}"`;
+
+const hitMatches = (hit: MyGeneHit, query: string) => {
+  const q = query.toUpperCase();
+  const aliases = Array.isArray(hit.alias) ? hit.alias : hit.alias ? [hit.alias] : [];
+  return hit.symbol?.toUpperCase() === q || aliases.some((alias) => alias.toUpperCase() === q);
+};
+
+export async function fetchGeneMetadataSignals(symbols: string[]): Promise<Map<string, GeneMetadataSignal>> {
+  const map = new Map<string, GeneMetadataSignal>();
+  await Promise.all(chunk(symbols, CHUNK).map(async (batch) => {
+    const terms = batch.map(quoteGeneTerm).join(" OR ");
+    const params = new URLSearchParams({
+      q: `(symbol:(${terms}) OR alias:(${terms}))`,
+      species: "human",
+      fields: "symbol,name,summary,entrezgene,ensembl.gene,type_of_gene,alias",
+      size: String(Math.max(batch.length * 3, 20)),
+    });
+    try {
+      const res = await fetch(`${MYGENE_URL}?${params.toString()}`);
+      if (!res.ok) throw new Error(`mygene.info ${res.status}`);
+      const json = await res.json() as { hits?: MyGeneHit[] };
+      for (const symbol of batch) {
+        const hit = json.hits?.find((h) => hitMatches(h, symbol));
+        if (!hit) continue;
+        map.set(symbol.toUpperCase(), {
+          entrezId: hit.entrezgene ? String(hit.entrezgene) : undefined,
+          ensemblId: getEnsemblId(hit.ensembl),
+          officialSymbol: hit.symbol,
+          fullName: hit.name,
+          description: hit.summary,
+          geneType: hit.type_of_gene,
+        });
+      }
+    } catch (e) {
+      console.warn("MyGene metadata batch failed", e);
+    }
+  }));
+  return map;
+}
+
 export async function fetchLiveSignals(symbols: string[]): Promise<Map<string, LiveSignals>> {
-  const [civic, dgidb] = await Promise.all([fetchCivicGeneSignals(symbols), fetchDgidbGeneSignals(symbols)]);
+  const [civic, dgidb, metadata] = await Promise.all([fetchCivicGeneSignals(symbols), fetchDgidbGeneSignals(symbols), fetchGeneMetadataSignals(symbols)]);
   const out = new Map<string, LiveSignals>();
   for (const s of symbols) {
     const key = s.toUpperCase();
     const civicSignal = civic.get(key);
     const dgidbSignal = dgidb.get(key);
-    const roleText = [civicSignal?.fullName, civicSignal?.description, dgidbSignal?.longName, ...(dgidbSignal?.categories ?? [])].join(" ");
+    const metadataSignal = metadata.get(key);
+    const roleText = [civicSignal?.fullName, civicSignal?.description, dgidbSignal?.longName, metadataSignal?.fullName, metadataSignal?.description, ...(dgidbSignal?.categories ?? [])].join(" ");
     out.set(key, {
       civicEvidenceCount: civicSignal?.evidenceCount ?? 0,
       dgidbDrugs: dgidbSignal?.drugs ?? [],
-      entrezId: civicSignal?.entrezId,
-      fullName: civicSignal?.fullName ?? dgidbSignal?.longName,
-      description: civicSignal?.description,
+      entrezId: civicSignal?.entrezId ?? metadataSignal?.entrezId,
+      ensemblId: metadataSignal?.ensemblId,
+      officialSymbol: metadataSignal?.officialSymbol,
+      fullName: civicSignal?.fullName ?? dgidbSignal?.longName ?? metadataSignal?.fullName,
+      description: civicSignal?.description ?? metadataSignal?.description,
+      geneType: metadataSignal?.geneType,
+      metadataFound: Boolean(metadataSignal),
       dgidbCategories: dgidbSignal?.categories ?? [],
       inferredRole: inferRole(roleText),
       fetched: true,
