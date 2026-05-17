@@ -256,38 +256,40 @@ function buildHtmlReport(genes: GeneAnnotation[]): string {
 
 const ReportBuilder = () => {
   const { annotations } = useGeneData();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Key selections by row index so duplicate symbols (rare, but possible after
+  // live symbol normalization) still count as distinct rows.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState("");
   const [fields, setFields] = useState<ExportFields>(DEFAULT_FIELDS);
   const [showFields, setShowFields] = useState(false);
 
-  const filtered = useMemo(() => {
-    if (!search) return annotations;
-    const q = search.toLowerCase();
-    return annotations.filter(g => g.symbol.toLowerCase().includes(q) || g.description.toLowerCase().includes(q));
-  }, [annotations, search]);
+  const indexed = useMemo(
+    () => annotations.map((gene, idx) => ({ gene, idx })),
+    [annotations]
+  );
 
-  const allFilteredSelected = filtered.length > 0 && filtered.every(g => selected.has(g.symbol));
+  const filtered = useMemo(() => {
+    if (!search) return indexed;
+    const q = search.toLowerCase();
+    return indexed.filter(({ gene }) => gene.symbol.toLowerCase().includes(q) || gene.description.toLowerCase().includes(q));
+  }, [indexed, search]);
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(({ idx }) => selected.has(idx));
 
   const toggleAll = () => {
-    if (allFilteredSelected) {
-      const next = new Set(selected);
-      filtered.forEach(g => next.delete(g.symbol));
-      setSelected(next);
-    } else {
-      const next = new Set(selected);
-      filtered.forEach(g => next.add(g.symbol));
-      setSelected(next);
-    }
-  };
-
-  const toggle = (symbol: string) => {
     const next = new Set(selected);
-    next.has(symbol) ? next.delete(symbol) : next.add(symbol);
+    if (allFilteredSelected) filtered.forEach(({ idx }) => next.delete(idx));
+    else filtered.forEach(({ idx }) => next.add(idx));
     setSelected(next);
   };
 
-  const selectedGenes = annotations.filter(g => selected.has(g.symbol));
+  const toggle = (idx: number) => {
+    const next = new Set(selected);
+    next.has(idx) ? next.delete(idx) : next.add(idx);
+    setSelected(next);
+  };
+
+  const selectedGenes = annotations.filter((_, idx) => selected.has(idx));
   const activeFieldCount = Object.values(fields).filter(Boolean).length;
 
   const exportJSON = () => {
@@ -336,14 +338,14 @@ const ReportBuilder = () => {
           </label>
         </div>
         <div className="max-h-[320px] overflow-y-auto divide-y divide-border">
-          {filtered.map(gene => (
+          {filtered.map(({ gene, idx }) => (
             <label
-              key={gene.symbol}
+              key={idx}
               className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors hover:bg-muted/50 ${
-                selected.has(gene.symbol) ? "bg-primary/5" : ""
+                selected.has(idx) ? "bg-primary/5" : ""
               }`}
             >
-              <Checkbox checked={selected.has(gene.symbol)} onCheckedChange={() => toggle(gene.symbol)} />
+              <Checkbox checked={selected.has(idx)} onCheckedChange={() => toggle(idx)} />
               <span className="gene-symbol text-sm">{gene.symbol}</span>
               <span className={`data-chip ${ROLE_STYLES[gene.role]}`}>{gene.role}</span>
               <span className="text-xs text-muted-foreground ml-auto hidden sm:inline line-clamp-1 max-w-[280px]">
