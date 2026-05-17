@@ -95,22 +95,41 @@ const parseGeneList = (text: string): ParseResult => {
   const seen = new Set<string>();
   const genes: string[] = [];
   let skipped = 0;
+  let duplicates = 0;
+  const skippedExamples: string[] = [];
+  const duplicateExamples: string[] = [];
   for (let i = startIdx; i < lines.length; i++) {
     const raw = delim ? (lines[i].split(delim)[geneCol] ?? "") : lines[i];
     const t = raw.trim().replace(/^["']|["']$/g, "");
-    if (!isValidSymbol(t)) { skipped++; continue; }
+    if (!isValidSymbol(t)) {
+      skipped++;
+      if (t && skippedExamples.length < 3) skippedExamples.push(t);
+      continue;
+    }
     const upper = t.toUpperCase();
-    if (seen.has(upper)) continue;
+    if (seen.has(upper)) {
+      duplicates++;
+      if (duplicateExamples.length < 3) duplicateExamples.push(upper);
+      continue;
+    }
     seen.add(upper);
     genes.push(upper);
+  }
+  const totalRows = lines.length - startIdx;
+  info.push(`Parsed ${genes.length} unique gene symbol${genes.length !== 1 ? "s" : ""} from ${totalRows} data row${totalRows !== 1 ? "s" : ""}.`);
+  if (duplicates > 0) {
+    warnings.push(
+      `${duplicates} duplicate symbol${duplicates !== 1 ? "s" : ""} merged (case-insensitive)${duplicateExamples.length ? `: ${duplicateExamples.join(", ")}${duplicates > duplicateExamples.length ? "…" : ""}` : ""}.`
+    );
+  }
+  if (skipped > 0) {
+    warnings.push(
+      `${skipped} row${skipped !== 1 ? "s" : ""} skipped as non-HGNC tokens${skippedExamples.length ? `: ${skippedExamples.map(s => `"${s}"`).join(", ")}${skipped > skippedExamples.length ? "…" : ""}` : ""}.`
+    );
   }
 
   if (genes.length === 0) {
     warnings.push("No valid gene symbols found. Check delimiter and column selection.");
-  } else if (skipped > genes.length * 0.3) {
-    warnings.push(
-      `${skipped} rows skipped (not valid HGNC-style symbols). Confirm you selected the right column.`
-    );
   }
 
   return { genes, warnings, info };
