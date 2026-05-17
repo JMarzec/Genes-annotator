@@ -128,7 +128,14 @@ const Index = () => {
 
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h1 className="text-xl font-bold text-foreground">Gene List Overview — Annotated Cancer Genes</h1>
+                <h1 className="text-xl font-bold text-foreground">
+                  Gene List Overview — Annotated Cancer Genes
+                  {selectedRoles.length > 0 && (
+                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                      ({filteredAnnotations.length} of {annotations.length} shown · filtered by {selectedRoles.join(", ")})
+                    </span>
+                  )}
+                </h1>
                 <div className="flex items-center gap-3">
                   {liveLoading && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -136,15 +143,23 @@ const Index = () => {
                       Fetching CIViC + DGIdb…
                     </span>
                   )}
+                  {selectedRoles.length > 0 && (
+                    <button
+                      onClick={() => setSelectedRoles([])}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                    >
+                      Clear role filter
+                    </button>
+                  )}
                   <button
-                    onClick={() => { setData(null); setAnnotations([]); setParseStats(null); }}
+                    onClick={() => { setData(null); setAnnotations([]); setParseStats(null); setSelectedRoles([]); }}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                   >
                     Upload new file
                   </button>
                 </div>
               </div>
-              <GeneTable genes={annotations} />
+              <GeneTable genes={filteredAnnotations} />
             </div>
 
             <div>
