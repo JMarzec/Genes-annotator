@@ -148,6 +148,10 @@ const ReportBuilder = () => {
     downloadFile(toCSV(rows), "gene_report.csv", "text/csv");
   };
 
+  const exportHTML = () => {
+    downloadFile(buildHtmlReport(annotations), "gene_report.html", "text/html");
+  };
+
   if (annotations.length === 0) {
     return (
       <div className="surface-card p-8 text-center animate-fade-in">
