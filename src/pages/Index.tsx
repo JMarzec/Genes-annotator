@@ -31,16 +31,32 @@ const Index = () => {
     setLiveLoading(true);
     try {
       const live = await fetchLiveSignals(annotated.map((a) => a.symbol));
+      const existingSymbols = new Set(annotated.map((a) => a.symbol.toUpperCase()));
+      const claimed = new Set<string>();
       const merged = annotated.map((a) => {
         const s = live.get(a.symbol.toUpperCase());
         if (!s) return { ...a, liveFetched: true };
         const liveDescription = s.description
           ? `${s.fullName ? `${s.fullName}. ` : ""}${s.description}`
           : s.fullName;
+        // Adopt official HGNC symbol only when it does not collide with another
+        // gene already in the cohort — otherwise we'd silently merge two rows
+        // (e.g. CD45 → PTPRC when PTPRC is also present) and lose one in
+        // selection/export.
+        let resolvedSymbol = a.symbol;
+        if (s.officialSymbol) {
+          const off = s.officialSymbol.toUpperCase();
+          const sameAsInput = off === a.symbol.toUpperCase();
+          const wouldCollide = !sameAsInput && (existingSymbols.has(off) || claimed.has(off));
+          if (!wouldCollide) {
+            resolvedSymbol = s.officialSymbol;
+            claimed.add(off);
+          }
+        }
         return {
           ...a,
           liveFetched: true,
-          symbol: s.officialSymbol ?? a.symbol,
+          symbol: resolvedSymbol,
           ensemblId: a.ensemblId !== "—" ? a.ensemblId : s.ensemblId ?? a.ensemblId,
           entrezId: a.entrezId !== "—" ? a.entrezId : s.entrezId ?? a.entrezId,
           role: a.role !== "Unknown" ? a.role : s.inferredRole ?? a.role,
