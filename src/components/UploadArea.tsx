@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { normalizeUploadedData } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 
+import type { ParseStats } from "@/contexts/GeneDataContext";
+
 interface UploadAreaProps {
-  onDataLoaded: (data: UploadedData) => void;
+  onDataLoaded: (data: UploadedData, stats: ParseStats) => void;
   onLoadDemo: () => void;
 }
 
@@ -13,6 +15,11 @@ interface ParseResult {
   genes: string[];
   warnings: string[];
   info: string[];
+  totalRows: number;
+  duplicates: number;
+  skipped: number;
+  duplicateExamples: string[];
+  skippedExamples: string[];
 }
 
 const HEADER_LABELS = ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol", "gene_name"];
@@ -24,7 +31,7 @@ const parseGeneList = (text: string): ParseResult => {
   const warnings: string[] = [];
   const info: string[] = [];
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info };
+  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info, totalRows: 0, duplicates: 0, skipped: 0, duplicateExamples: [], skippedExamples: [] };
 
   const sample = lines.slice(0, Math.min(5, lines.length)).join("\n");
   const counts: Record<string, number> = {
@@ -132,7 +139,7 @@ const parseGeneList = (text: string): ParseResult => {
     warnings.push("No valid gene symbols found. Check delimiter and column selection.");
   }
 
-  return { genes, warnings, info };
+  return { genes, warnings, info, totalRows: lines.length - startIdx, duplicates, skipped, duplicateExamples, skippedExamples };
 };
 
 const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
@@ -162,7 +169,17 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
             setError("JSON must contain an 'expressions' array.");
             return;
           }
-          onDataLoaded(normalizeUploadedData(json));
+          const normalized = normalizeUploadedData(json);
+          onDataLoaded(normalized, {
+            totalRows: Array.isArray(json.genes) ? json.genes.length : normalized.genes.length,
+            parsedUnique: normalized.genes.length,
+            duplicates: 0,
+            skipped: 0,
+            duplicateExamples: [],
+            skippedExamples: [],
+            source: "file",
+            fileName: file.name,
+          });
         } catch {
           setError("Invalid JSON file. Please check the format.");
         }
@@ -177,6 +194,15 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
         onDataLoaded({
           genes: result.genes,
           expressions: result.genes.map((g) => ({ gene: g, values: {} })),
+        }, {
+          totalRows: result.totalRows,
+          parsedUnique: result.genes.length,
+          duplicates: result.duplicates,
+          skipped: result.skipped,
+          duplicateExamples: result.duplicateExamples,
+          skippedExamples: result.skippedExamples,
+          source: "file",
+          fileName: file.name,
         });
       }
     };

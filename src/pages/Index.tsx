@@ -2,6 +2,7 @@ import { Dna, FlaskConical, FileText, Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
+import ParsedReportedCounter from "@/components/ParsedReportedCounter";
 import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import ReportBuilder from "@/components/ReportBuilder";
@@ -9,12 +10,14 @@ import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 import { useGeneData } from "@/contexts/GeneDataContext";
 import { fetchLiveSignals } from "@/lib/geneApis";
+import type { ParseStats } from "@/contexts/GeneDataContext";
 
 const Index = () => {
-  const { data, annotations, liveLoading, setData, setAnnotations, setLiveLoading } = useGeneData();
+  const { data, annotations, liveLoading, parseStats, setData, setAnnotations, setLiveLoading, setParseStats } = useGeneData();
 
-  const handleData = async (d: UploadedData) => {
+  const handleData = async (d: UploadedData, stats: ParseStats) => {
     setData(d);
+    setParseStats(stats);
     const annotated = annotateGenes(d);
     setAnnotations(annotated);
     setLiveLoading(true);
@@ -49,7 +52,15 @@ const Index = () => {
     }
   };
 
-  const loadDemo = () => handleData(SAMPLE_DATA);
+  const loadDemo = () => handleData(SAMPLE_DATA, {
+    totalRows: SAMPLE_DATA.genes.length,
+    parsedUnique: SAMPLE_DATA.genes.length,
+    duplicates: 0,
+    skipped: 0,
+    duplicateExamples: [],
+    skippedExamples: [],
+    source: "demo",
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,6 +107,9 @@ const Index = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            {parseStats && (
+              <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
+            )}
             <SchemaPreview data={data} />
 
             <div>
@@ -109,7 +123,7 @@ const Index = () => {
                     </span>
                   )}
                   <button
-                    onClick={() => { setData(null); setAnnotations([]); }}
+                    onClick={() => { setData(null); setAnnotations([]); setParseStats(null); }}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                   >
                     Upload new file
