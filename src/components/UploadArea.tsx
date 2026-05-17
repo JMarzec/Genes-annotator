@@ -130,10 +130,6 @@ const parseGeneList = (text: string): ParseResult => {
 
   if (genes.length === 0) {
     warnings.push("No valid gene symbols found. Check delimiter and column selection.");
-  } else if (skipped > genes.length * 0.3) {
-    warnings.push(
-      `${skipped} rows skipped (not valid HGNC-style symbols). Confirm you selected the right column.`
-    );
   }
 
   return { genes, warnings, info };
