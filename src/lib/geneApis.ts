@@ -149,6 +149,8 @@ const getEnsemblId = (ensembl?: MyGeneHit["ensembl"]): string | undefined => {
   return ensembl?.gene;
 };
 
+const quoteGeneTerm = (symbol: string) => `"${symbol.replace(/["\\]/g, "").toUpperCase()}"`;
+
 const hitMatches = (hit: MyGeneHit, query: string) => {
   const q = query.toUpperCase();
   const aliases = Array.isArray(hit.alias) ? hit.alias : hit.alias ? [hit.alias] : [];
@@ -158,7 +160,7 @@ const hitMatches = (hit: MyGeneHit, query: string) => {
 export async function fetchGeneMetadataSignals(symbols: string[]): Promise<Map<string, GeneMetadataSignal>> {
   const map = new Map<string, GeneMetadataSignal>();
   await Promise.all(chunk(symbols, CHUNK).map(async (batch) => {
-    const terms = batch.map((s) => s.toUpperCase()).join(" OR ");
+    const terms = batch.map(quoteGeneTerm).join(" OR ");
     const params = new URLSearchParams({
       q: `(symbol:(${terms}) OR alias:(${terms}))`,
       species: "human",
