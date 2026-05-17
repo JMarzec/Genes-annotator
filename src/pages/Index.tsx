@@ -29,12 +29,14 @@ const Index = () => {
         return {
           ...a,
           liveFetched: true,
+          symbol: s.officialSymbol ?? a.symbol,
+          ensemblId: a.ensemblId !== "—" ? a.ensemblId : s.ensemblId ?? a.ensemblId,
           entrezId: a.entrezId !== "—" ? a.entrezId : s.entrezId ?? a.entrezId,
           role: a.role !== "Unknown" ? a.role : s.inferredRole ?? a.role,
           description: a.description !== "No annotation available." ? a.description : liveDescription ?? a.description,
           cancerRelevance: a.cancerRelevance !== "Unknown"
             ? a.cancerRelevance
-            : s.description ?? (s.civicEvidenceCount > 0 ? `${a.symbol} has curated clinical evidence in CIViC.` : a.cancerRelevance),
+            : s.description ?? (s.metadataFound ? `${s.officialSymbol ?? a.symbol} is annotated in public human gene metadata${s.geneType ? ` as ${s.geneType}` : ""}.` : (s.civicEvidenceCount > 0 ? `${a.symbol} has curated clinical evidence in CIViC.` : a.cancerRelevance)),
           civicEvidenceCount: s.civicEvidenceCount,
           dgidbDrugs: s.dgidbDrugs,
           civicEvidence: s.civicEvidenceCount > 0 || a.civicEvidence,
