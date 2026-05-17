@@ -51,7 +51,15 @@ const Index = () => {
     }
   };
 
-  const loadDemo = () => handleData(SAMPLE_DATA);
+  const loadDemo = () => handleData(SAMPLE_DATA, {
+    totalRows: SAMPLE_DATA.genes.length,
+    parsedUnique: SAMPLE_DATA.genes.length,
+    duplicates: 0,
+    skipped: 0,
+    duplicateExamples: [],
+    skippedExamples: [],
+    source: "demo",
+  });
 
   return (
     <div className="min-h-screen bg-background">
