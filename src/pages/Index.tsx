@@ -9,12 +9,14 @@ import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
 import type { UploadedData } from "@/data/sampleData";
 import { useGeneData } from "@/contexts/GeneDataContext";
 import { fetchLiveSignals } from "@/lib/geneApis";
+import type { ParseStats } from "@/contexts/GeneDataContext";
 
 const Index = () => {
-  const { data, annotations, liveLoading, setData, setAnnotations, setLiveLoading } = useGeneData();
+  const { data, annotations, liveLoading, parseStats, setData, setAnnotations, setLiveLoading, setParseStats } = useGeneData();
 
-  const handleData = async (d: UploadedData) => {
+  const handleData = async (d: UploadedData, stats: ParseStats) => {
     setData(d);
+    setParseStats(stats);
     const annotated = annotateGenes(d);
     setAnnotations(annotated);
     setLiveLoading(true);
