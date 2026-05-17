@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
 import UploadArea from "@/components/UploadArea";
 import ParsedReportedCounter from "@/components/ParsedReportedCounter";
+import GeneStats from "@/components/GeneStats";
 import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import ReportBuilder from "@/components/ReportBuilder";
@@ -111,6 +112,7 @@ const Index = () => {
               <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
             )}
             <SchemaPreview data={data} />
+            <GeneStats annotations={annotations} />
 
             <div>
               <div className="flex items-center justify-between mb-4">
