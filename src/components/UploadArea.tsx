@@ -31,7 +31,7 @@ const parseGeneList = (text: string): ParseResult => {
   const warnings: string[] = [];
   const info: string[] = [];
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info };
+  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info, totalRows: 0, duplicates: 0, skipped: 0, duplicateExamples: [], skippedExamples: [] };
 
   const sample = lines.slice(0, Math.min(5, lines.length)).join("\n");
   const counts: Record<string, number> = {
