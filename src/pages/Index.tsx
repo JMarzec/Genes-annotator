@@ -119,7 +119,12 @@ const Index = () => {
               <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
             )}
             <SchemaPreview data={data} />
-            <GeneStats annotations={annotations} />
+            <GeneStats
+              annotations={annotations}
+              selectedRoles={selectedRoles}
+              onToggleRole={toggleRole}
+              onClearRoles={() => setSelectedRoles([])}
+            />
 
             <div>
               <div className="flex items-center justify-between mb-4">
