@@ -107,6 +107,9 @@ const Index = () => {
           </div>
         ) : (
           <div className="space-y-6">
+            {parseStats && (
+              <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
+            )}
             <SchemaPreview data={data} />
 
             <div>
