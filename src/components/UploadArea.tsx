@@ -139,7 +139,7 @@ const parseGeneList = (text: string): ParseResult => {
     warnings.push("No valid gene symbols found. Check delimiter and column selection.");
   }
 
-  return { genes, warnings, info };
+  return { genes, warnings, info, totalRows: lines.length - startIdx, duplicates, skipped, duplicateExamples, skippedExamples };
 };
 
 const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
