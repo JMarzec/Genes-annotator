@@ -240,6 +240,12 @@ const ReportBuilder = () => {
           Export as CSV ({selected.size} gene{selected.size !== 1 ? "s" : ""})
         </Button>
       </div>
+
+      {/* Interactive HTML report — always all genes */}
+      <Button onClick={exportHTML} variant="secondary" className="gap-2 w-full">
+        <Globe className="h-4 w-4" />
+        Export Interactive HTML Report (all {annotations.length} genes)
+      </Button>
     </div>
   );
 };
