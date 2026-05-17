@@ -169,7 +169,17 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
             setError("JSON must contain an 'expressions' array.");
             return;
           }
-          onDataLoaded(normalizeUploadedData(json));
+          const normalized = normalizeUploadedData(json);
+          onDataLoaded(normalized, {
+            totalRows: Array.isArray(json.genes) ? json.genes.length : normalized.genes.length,
+            parsedUnique: normalized.genes.length,
+            duplicates: 0,
+            skipped: 0,
+            duplicateExamples: [],
+            skippedExamples: [],
+            source: "file",
+            fileName: file.name,
+          });
         } catch {
           setError("Invalid JSON file. Please check the format.");
         }
@@ -184,6 +194,15 @@ const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
         onDataLoaded({
           genes: result.genes,
           expressions: result.genes.map((g) => ({ gene: g, values: {} })),
+        }, {
+          totalRows: result.totalRows,
+          parsedUnique: result.genes.length,
+          duplicates: result.duplicates,
+          skipped: result.skipped,
+          duplicateExamples: result.duplicateExamples,
+          skippedExamples: result.skippedExamples,
+          source: "file",
+          fileName: file.name,
         });
       }
     };
