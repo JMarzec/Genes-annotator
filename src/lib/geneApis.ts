@@ -5,8 +5,12 @@ export interface LiveSignals {
   civicEvidenceCount: number;
   dgidbDrugs: string[];
   entrezId?: string;
+  ensemblId?: string;
+  officialSymbol?: string;
   fullName?: string;
   description?: string;
+  geneType?: string;
+  metadataFound?: boolean;
   dgidbCategories?: string[];
   inferredRole?: "Oncogene" | "Tumor Suppressor" | "Kinase" | "DNA Repair" | "TF" | "Immune" | "Unknown";
   fetched: boolean;
@@ -25,8 +29,29 @@ interface DgidbGeneSignal {
   categories: string[];
 }
 
+interface GeneMetadataSignal {
+  entrezId?: string;
+  ensemblId?: string;
+  officialSymbol?: string;
+  fullName?: string;
+  description?: string;
+  geneType?: string;
+}
+
+interface MyGeneHit {
+  _score?: number;
+  symbol?: string;
+  name?: string;
+  summary?: string;
+  entrezgene?: string | number;
+  ensembl?: { gene?: string } | { gene?: string }[];
+  type_of_gene?: string;
+  alias?: string | string[];
+}
+
 const CIVIC_URL = "https://civicdb.org/api/graphql";
 const DGIDB_URL = "https://dgidb.org/api/graphql";
+const MYGENE_URL = "https://mygene.info/v3/query";
 const CHUNK = 40;
 
 const chunk = <T,>(arr: T[], size: number): T[][] => {
