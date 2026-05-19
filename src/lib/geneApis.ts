@@ -172,7 +172,13 @@ export async function fetchGeneMetadataSignals(symbols: string[]): Promise<Map<s
       if (!res.ok) throw new Error(`mygene.info ${res.status}`);
       const json = await res.json() as { hits?: MyGeneHit[] };
       for (const symbol of batch) {
-        const hit = json.hits?.find((h) => hitMatches(h, symbol));
+        const q = symbol.toUpperCase();
+        // Prefer an exact official-symbol match over an alias match so valid
+        // HGNC symbols (e.g. MAP2) are never rewritten to a different gene
+        // (e.g. METAP2) just because they appear in that gene's alias list.
+        const hit =
+          json.hits?.find((h) => h.symbol?.toUpperCase() === q) ??
+          json.hits?.find((h) => hitMatches(h, symbol));
         if (!hit) continue;
         map.set(symbol.toUpperCase(), {
           entrezId: hit.entrezgene ? String(hit.entrezgene) : undefined,
