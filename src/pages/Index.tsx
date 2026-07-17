@@ -152,16 +152,22 @@ const Index = () => {
         )}
       </main>
 
-      <footer className="border-t py-4 text-center text-xs text-muted-foreground">
-        Powered by{" "}
-        <a
-          href="https://accelbio.pt/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-primary hover:underline"
-        >
-          AccelBio
+      <footer className="border-t py-4 text-center text-xs text-muted-foreground space-x-3">
+        <a href="/connect" className="font-medium text-primary hover:underline">
+          Connect an AI assistant
         </a>
+        <span>·</span>
+        <span>
+          Powered by{" "}
+          <a
+            href="https://accelbio.pt/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
+            AccelBio
+          </a>
+        </span>
       </footer>
     </div>
   );
