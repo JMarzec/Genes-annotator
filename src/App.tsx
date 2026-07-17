@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import GeneDetail from "./pages/GeneDetail";
 import Login from "./pages/Login";
 import OAuthConsent from "./pages/OAuthConsent";
+import Connect from "./pages/Connect";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/gene/:symbol" element={<GeneDetail />} />
             <Route path="/login" element={<Login />} />
             <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
+            <Route path="/connect" element={<Connect />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
