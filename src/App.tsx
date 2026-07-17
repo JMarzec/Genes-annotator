@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import GeneDetail from "./pages/GeneDetail";
 import Login from "./pages/Login";
 import OAuthConsent from "./pages/OAuthConsent";
+import Connect from "./pages/Connect";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
