@@ -15,6 +15,10 @@ describe('gene lookup identity and source status', () => {
     expect(result?.officialSymbol).toBe('ERBB2'); expect(result?.civicEvidenceCount).toBe(307);
     expect(result?.dgidbDrugs).toEqual(['DRUG1']); expect(clinical).toEqual([['ERBB2'],['ERBB2']]);
   });
+  it('does not assign BRCA2 to kinase because its summary mentions kinase signaling', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.includes('mygene') ? Response.json({hits:[{symbol:'BRCA2',name:'BRCA2 DNA repair associated',summary:'Regulates kinase signaling.'}],total:1}) : Response.json({data:{genes:{nodes:[]}}})));
+    expect((await fetchLiveSignals(['BRCA2'])).get('BRCA2')?.inferredRole).toBe('DNA Repair');
+  });
   it('returns unavailable status on upstream failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const result = (await fetchLiveSignals(['MAP2'])).get('MAP2');

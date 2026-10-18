@@ -16,15 +16,15 @@ export function buildHtmlReport(genes: GeneAnnotation[]): string {
     const drugs = g.dgidbDrugs ?? [];
     const stats = g.expressionStats;
     const links: Array<[string, string]> = [
-      ["NCBI", g.entrezId && g.entrezId !== "—" ? `https://www.ncbi.nlm.nih.gov/gene/${g.entrezId}` : `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(g.symbol)}`],
-      ["Ensembl", g.ensemblId && g.ensemblId !== "—" ? `https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=${g.ensemblId}` : `https://www.ensembl.org/Multi/Search/Results?q=${encodeURIComponent(g.symbol)}`],
-      ["CIViC", `https://civicdb.org/search/genes/${encodeURIComponent(g.symbol)}`],
-      ["DGIdb", `https://www.dgidb.org/results?searchType=gene&searchTerms=${encodeURIComponent(g.symbol)}`],
-      ["GeneCards", `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(g.symbol)}`],
-      ["UniProt", `https://www.uniprot.org/uniprotkb?query=gene:${encodeURIComponent(g.symbol)}+AND+organism_id:9606`],
-      ["OMIM", `https://www.omim.org/search?search=${encodeURIComponent(g.symbol)}`],
-      ["COSMIC", `https://cancer.sanger.ac.uk/cosmic/gene/analysis?ln=${encodeURIComponent(g.symbol)}`],
-      ["cBioPortal", `https://www.cbioportal.org/results/cancerTypesSummary?gene_list=${encodeURIComponent(g.symbol)}`],
+      ["NCBI", g.entrezId && g.entrezId !== "—" ? `https://www.ncbi.nlm.nih.gov/gene/${g.entrezId}` : `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["Ensembl", g.ensemblId && g.ensemblId !== "—" ? `https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=${g.ensemblId}` : `https://www.ensembl.org/Multi/Search/Results?q=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["CIViC", `https://civicdb.org/search/genes/${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["DGIdb", `https://www.dgidb.org/results?searchType=gene&searchTerms=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["GeneCards", `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["UniProt", `https://www.uniprot.org/uniprotkb?query=gene:${encodeURIComponent(g.officialSymbol ?? g.symbol)}+AND+organism_id:9606`],
+      ["OMIM", `https://www.omim.org/search?search=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["COSMIC", `https://cancer.sanger.ac.uk/cosmic/gene/analysis?ln=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
+      ["cBioPortal", `https://www.cbioportal.org/results/cancerTypesSummary?gene_list=${encodeURIComponent(g.officialSymbol ?? g.symbol)}`],
     ];
     return `
     <article class="card" data-symbol="${escapeHtml(g.symbol)}" data-role="${escapeHtml(g.role)}">
@@ -137,7 +137,7 @@ export function buildHtmlReport(genes: GeneAnnotation[]): string {
   .controls input { flex:1; min-width:200px; }
   .count { font-size:12px; color:hsl(var(--muted-foreground)); margin-left:auto; }
   main { padding:24px; max-width:1400px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr)); gap:16px; }
-  .card { background:hsl(var(--card)); border:1px solid hsl(var(--border)); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .card { background:hsl(var(--card)); border:1px solid hsl(var(--border)); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
   .card header { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
   .card h2 { margin:0; font-size:18px; font-family:ui-monospace,Menlo,monospace; }
   .chip { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }

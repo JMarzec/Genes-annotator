@@ -55,7 +55,7 @@ const SummaryTab = ({ gene }: { gene: GeneAnnotation }) => (
           <div className="flex gap-1 mt-1">
             {gene.civicEvidence && <span className="data-chip bg-info/15 text-info"><Shield className="h-3 w-3 mr-1" />CIViC</span>}
             {gene.dgidbInteractions && <span className="data-chip bg-accent/15 text-accent"><Pill className="h-3 w-3 mr-1" />DGIdb</span>}
-            {!gene.civicEvidence && !gene.dgidbInteractions && <span className="text-xs text-muted-foreground">None</span>}
+            {!gene.civicEvidence && !gene.dgidbInteractions && <span className="text-xs text-muted-foreground">{gene.sourceStatus?.civic === "success" && gene.sourceStatus?.dgidb === "success" ? "None" : "Not fully checked"}</span>}
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ const SummaryTab = ({ gene }: { gene: GeneAnnotation }) => (
     <div className="surface-card p-6">
       <h3 className="text-sm font-semibold text-foreground mb-3">External Resources</h3>
       <div className="flex flex-wrap gap-2">
-        <ExternalLinkButton href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${gene.symbol}`} label="GeneCards" icon={Dna} />
+        <ExternalLinkButton href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}`} label="GeneCards" icon={Dna} />
         <ExternalLinkButton href={`https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(gene.entrezId === "—" ? gene.officialSymbol ?? gene.symbol : gene.entrezId)}`} label="NCBI Gene" icon={Dna} />
         <ExternalLinkButton href={`https://www.ensembl.org/Multi/Search/Results?q=${encodeURIComponent(gene.ensemblId === "—" ? gene.officialSymbol ?? gene.symbol : gene.ensemblId)}`} label="Ensembl" icon={Dna} />
       </div>
@@ -110,7 +110,7 @@ const ClinicalEvidenceTab = ({ gene }: { gene: GeneAnnotation }) => (
           </div>
           <p className="text-xs text-muted-foreground">Clinical Interpretation of Variants in Cancer</p>
           <a
-            href={`https://civicdb.org/links/entrez_name/${gene.symbol}`}
+            href={`https://civicdb.org/links/entrez_name/${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-info hover:underline mt-2"
@@ -139,7 +139,7 @@ const ClinicalEvidenceTab = ({ gene }: { gene: GeneAnnotation }) => (
             </div>
           )}
           <a
-            href={`https://www.dgidb.org/genes/${gene.symbol}`}
+            href={`https://www.dgidb.org/genes/${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-2"
@@ -166,7 +166,7 @@ const DruggabilityTab = ({ gene }: { gene: GeneAnnotation }) => {
         <div className="grid sm:grid-cols-3 gap-4">
           <div className={`rounded-lg border p-4 text-center ${isDruggable ? "border-accent/30 bg-accent/5" : "border-border"}`}>
             <Pill className={`h-8 w-8 mx-auto mb-2 ${isDruggable ? "text-accent" : "text-muted-foreground"}`} />
-            <div className="text-sm font-semibold">{isDruggable ? "Druggable" : "Not Annotated"}</div>
+            <div className="text-sm font-semibold">{gene.sourceStatus?.dgidb === "unavailable" ? "Source unavailable" : isDruggable ? "Druggable" : gene.sourceStatus?.dgidb === "success" ? "No interactions found" : "Not checked"}</div>
             <div className="text-xs text-muted-foreground mt-1">DGIdb interactions</div>
           </div>
           <div className={`rounded-lg border p-4 text-center ${hasTherapyRelevance ? "border-warning/30 bg-warning/5" : "border-border"}`}>
@@ -176,7 +176,7 @@ const DruggabilityTab = ({ gene }: { gene: GeneAnnotation }) => {
           </div>
           <div className={`rounded-lg border p-4 text-center ${gene.civicEvidence ? "border-info/30 bg-info/5" : "border-border"}`}>
             <TrendingUp className={`h-8 w-8 mx-auto mb-2 ${gene.civicEvidence ? "text-info" : "text-muted-foreground"}`} />
-            <div className="text-sm font-semibold">{gene.civicEvidence ? "Clinical Evidence" : "No confirmed evidence"}</div>
+            <div className="text-sm font-semibold">{gene.sourceStatus?.civic === "unavailable" ? "Source unavailable" : gene.civicEvidence ? "Clinical Evidence" : gene.sourceStatus?.civic === "success" ? "No evidence found" : "Not checked"}</div>
             <div className="text-xs text-muted-foreground mt-1">CIViC evidence presence</div>
           </div>
         </div>
@@ -188,9 +188,9 @@ const DruggabilityTab = ({ gene }: { gene: GeneAnnotation }) => {
           Explore known drug-gene interactions and potential therapeutic targets for <span className="gene-symbol">{gene.symbol}</span>.
         </p>
         <div className="flex flex-wrap gap-2">
-          <ExternalLinkButton href={`https://www.dgidb.org/genes/${gene.symbol}`} label="DGIdb Interactions" icon={Pill} />
-          <ExternalLinkButton href={`https://www.mycancergenome.org/content/gene/${gene.symbol}/`} label="My Cancer Genome" icon={Dna} />
-          <ExternalLinkButton href={`https://www.oncokb.org/gene/${gene.symbol}`} label="OncoKB" icon={Shield} />
+          <ExternalLinkButton href={`https://www.dgidb.org/genes/${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}`} label="DGIdb Interactions" icon={Pill} />
+          <ExternalLinkButton href={`https://www.mycancergenome.org/content/gene/${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}/`} label="My Cancer Genome" icon={Dna} />
+          <ExternalLinkButton href={`https://www.oncokb.org/gene/${encodeURIComponent(gene.officialSymbol ?? gene.symbol)}`} label="OncoKB" icon={Shield} />
         </div>
       </div>
     </div>

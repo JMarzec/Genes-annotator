@@ -130,7 +130,7 @@ async function fetchLiveSignals(symbols, signal) {
       geneType: hit?.type_of_gene,
       metadataFound: Boolean(hit),
       dgidbCategories: categories,
-      inferredRole: inferRole([hit?.name, hit?.summary, c?.description, ...categories].join(" ")),
+      inferredRole: inferRole([hit?.name, c?.fullName, d?.longName, ...categories].join(" ")),
       resolution: meta?.resolution ?? "unavailable",
       sourceStatus: { civic: civicStatus.get(key) ?? "unavailable", dgidb: dgidbStatus.get(key) ?? "unavailable", metadata: meta?.status ?? "unavailable" },
       fetched: true
