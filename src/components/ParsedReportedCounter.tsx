@@ -49,14 +49,14 @@ const ParsedReportedCounter = ({ stats, annotations, liveLoading }: Props) => {
     (a.description && a.description !== "No annotation available.")
   ).length;
   const reportable = annotations.length;
-  const droppedFromInput = Math.max(0, stats.totalRows - stats.parsedUnique);
-  const droppedFromParsed = Math.max(0, stats.parsedUnique - reportable);
+  const droppedFromInput = Math.max(0, stats.totalRows - (stats.parsedRows ?? stats.parsedUnique));
+  const droppedFromParsed = Math.max(0, (stats.parsedRows ?? stats.parsedUnique) - reportable);
   const noAnnotation = Math.max(0, reportable - annotated);
 
   const reasons: string[] = [];
   if (stats.duplicates > 0) {
     reasons.push(
-      `${stats.duplicates} duplicate symbol${stats.duplicates !== 1 ? "s" : ""} merged (case-insensitive)${
+      `${stats.duplicates} duplicate symbol${stats.duplicates !== 1 ? "s" : ""} retained as separate rows${
         stats.duplicateExamples.length ? `: ${stats.duplicateExamples.join(", ")}${stats.duplicates > stats.duplicateExamples.length ? "…" : ""}` : ""
       }`
     );
@@ -73,7 +73,7 @@ const ParsedReportedCounter = ({ stats, annotations, liveLoading }: Props) => {
   }
   if (noAnnotation > 0) {
     reasons.push(
-      `${noAnnotation} reportable gene${noAnnotation !== 1 ? "s" : ""} have no curated annotation${liveLoading ? " yet (live lookup in progress)" : " from CIViC / DGIdb / MyGene.info"}`
+      `${noAnnotation} reportable gene${noAnnotation !== 1 ? "s" : ""} have no available annotation${liveLoading ? " yet (live lookup in progress)" : " in available results; unavailable sources are not negative findings"}`
     );
   }
 
@@ -93,12 +93,12 @@ const ParsedReportedCounter = ({ stats, annotations, liveLoading }: Props) => {
         <span className="text-muted-foreground text-lg pb-2">→</span>
         <Step
           icon={Filter}
-          label="Parsed (unique)"
-          value={stats.parsedUnique}
+          label="Parsed rows"
+          value={stats.parsedRows ?? stats.parsedUnique}
           hint={
             droppedFromInput > 0
               ? `${droppedFromInput} dropped (duplicates / invalid)`
-              : "All input rows passed validation"
+              : `${stats.parsedUnique} distinct symbols; repeated rows preserved`
           }
           tone={droppedFromInput > 0 ? "warning" : "default"}
         />

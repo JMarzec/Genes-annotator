@@ -84,7 +84,8 @@ describe("ReportBuilder selection is index-safe", () => {
     // select-all checkbox.
     const visibleCheckboxes = screen.getAllByRole("checkbox");
     expect(visibleCheckboxes).toHaveLength(2);
-    const tp53Row = screen.getByText("TP53").closest("label")!;
+    const tp53Row = screen.getByText("TP53").closest("label");
+    if (!tp53Row) throw new Error("Expected TP53 row");
     const tp53Checkbox = within(tp53Row).getByRole("checkbox");
     expect(tp53Checkbox).not.toBeChecked();
   });

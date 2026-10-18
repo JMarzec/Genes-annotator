@@ -3,27 +3,23 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Dna } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { cloudSignIn } from "@/lib/cloud-signin";
+import { oauthReturnPath } from "@/lib/oauth-return-path";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 
-const isSafeNext = (v: string | null): string => {
-  if (!v || !v.startsWith("/") || v.startsWith("//")) return "/";
-  return v;
-};
-
 const Login = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const next = isSafeNext(params.get("next"));
+  const next = oauthReturnPath(params.get("next"));
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const returnUrl = `${window.location.origin}${next}`;
+  const returnUrl = new URL(next, window.location.origin).href;
 
   const onEmailSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,12 +30,13 @@ const Login = () => {
         if (error) throw error;
         navigate(next, { replace: true });
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: returnUrl },
         });
         if (error) throw error;
+        if (data.session) { navigate(next, { replace: true }); return; }
         toast({ title: "Check your email", description: "Confirm your address to finish signing up." });
       }
     } catch (err) {
@@ -51,14 +48,12 @@ const Login = () => {
 
   const onGoogle = async () => {
     setBusy(true);
-    const res = await lovable.auth.signInWithOAuth("google", { redirect_uri: returnUrl });
-    if (res.error) {
-      toast({ title: "Google sign-in failed", description: res.error.message, variant: "destructive" });
-      setBusy(false);
-      return;
-    }
-    if (res.redirected) return;
-    navigate(next, { replace: true });
+    try {
+      const result = await cloudSignIn("google", returnUrl);
+      if (!result.redirected) navigate(next, { replace: true });
+    } catch (error) {
+      toast({ title: "Google sign-in failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally { setBusy(false); }
   };
 
   return (

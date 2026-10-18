@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Dna, FlaskConical, FileText, Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import DisclaimerBanner from "@/components/DisclaimerBanner";
@@ -8,36 +8,21 @@ import GeneStats from "@/components/GeneStats";
 import SchemaPreview from "@/components/SchemaPreview";
 import GeneTable from "@/components/GeneTable";
 import ReportBuilder from "@/components/ReportBuilder";
-import { SAMPLE_DATA, annotateGenes } from "@/data/sampleData";
+import { SAMPLE_DATA } from "@/data/sampleData";
 import type { UploadedData, GeneRole } from "@/data/sampleData";
 import { useGeneData } from "@/contexts/GeneDataContext";
-import { fetchLiveSignals } from "@/lib/geneApis";
-import { mergeLiveSignals } from "@/lib/mergeLiveSignals";
 import type { ParseStats } from "@/contexts/GeneDataContext";
 
 const Index = () => {
-  const { data, annotations, liveLoading, parseStats, setData, setAnnotations, setLiveLoading, setParseStats } = useGeneData();
-  const [selectedRoles, setSelectedRoles] = useState<GeneRole[]>([]);
+  const { data, annotations, liveLoading, parseStats, loadData, resetData, retryLive, selectedRoles, setSelectedRoles } = useGeneData();
   const toggleRole = (r: GeneRole) =>
     setSelectedRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
   const filteredAnnotations = selectedRoles.length === 0
     ? annotations
     : annotations.filter((a) => selectedRoles.includes(a.role));
 
-  const handleData = async (d: UploadedData, stats: ParseStats) => {
-    setData(d);
-    setParseStats(stats);
-    const annotated = annotateGenes(d);
-    setAnnotations(annotated);
-    setLiveLoading(true);
-    try {
-      const live = await fetchLiveSignals(annotated.map((a) => a.symbol));
-      const merged = mergeLiveSignals(annotated, live);
-      setAnnotations(merged);
-    } finally {
-      setLiveLoading(false);
-    }
-  };
+  const handleData = (d: UploadedData, stats: ParseStats) => { void loadData(d, stats); };
+  const unavailable = annotations.some(a => a.sourceStatus && Object.values(a.sourceStatus).includes("unavailable"));
 
   const loadDemo = () => handleData(SAMPLE_DATA, {
     totalRows: SAMPLE_DATA.genes.length,
@@ -97,6 +82,9 @@ const Index = () => {
             {parseStats && (
               <ParsedReportedCounter stats={parseStats} annotations={annotations} liveLoading={liveLoading} />
             )}
+            {parseStats?.columnInfo && <p className="text-sm text-muted-foreground">Gene column: {parseStats.columnInfo}</p>}
+            {parseStats?.warnings?.map(w => <p key={w} role="status" className="text-sm text-warning">{w}</p>)}
+            {unavailable && !liveLoading && <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-warning"><span>Some annotation sources are unavailable. Missing results are not confirmed negatives.</span><Button variant="outline" size="sm" onClick={() => void retryLive()}>Retry lookups</Button></div>}
             <SchemaPreview data={data} />
             <GeneStats
               annotations={annotations}
@@ -123,19 +111,19 @@ const Index = () => {
                     </span>
                   )}
                   {selectedRoles.length > 0 && (
-                    <button
+                    <Button variant="ghost" size="sm"
                       onClick={() => setSelectedRoles([])}
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                     >
                       Clear role filter
-                    </button>
+                    </Button>
                   )}
-                  <button
-                    onClick={() => { setData(null); setAnnotations([]); setParseStats(null); setSelectedRoles([]); }}
+                  <Button variant="ghost" size="sm"
+                    onClick={resetData}
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
                   >
                     Upload new file
-                  </button>
+                  </Button>
                 </div>
               </div>
               <GeneTable genes={filteredAnnotations} />

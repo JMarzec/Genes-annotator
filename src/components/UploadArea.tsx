@@ -1,294 +1,59 @@
-import { useState, useCallback } from "react";
-import { Upload, FileJson, CheckCircle2, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { normalizeUploadedData } from "@/data/sampleData";
-import type { UploadedData } from "@/data/sampleData";
-
-import type { ParseStats } from "@/contexts/GeneDataContext";
-
-interface UploadAreaProps {
-  onDataLoaded: (data: UploadedData, stats: ParseStats) => void;
-  onLoadDemo: () => void;
-}
-
-interface ParseResult {
-  genes: string[];
-  warnings: string[];
-  info: string[];
-  totalRows: number;
-  duplicates: number;
-  skipped: number;
-  duplicateExamples: string[];
-  skippedExamples: string[];
-}
-
-const HEADER_LABELS = ["gene", "genes", "symbol", "gene_symbol", "genesymbol", "hgnc", "hgnc_symbol", "gene_name"];
-const SYMBOL_RE = /^[A-Za-z0-9._-]+$/;
-
-const isValidSymbol = (t: string) => !!t && t.length <= 20 && SYMBOL_RE.test(t);
-
-const parseGeneList = (text: string): ParseResult => {
-  const warnings: string[] = [];
-  const info: string[] = [];
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
-  if (lines.length === 0) return { genes: [], warnings: ["File is empty."], info, totalRows: 0, duplicates: 0, skipped: 0, duplicateExamples: [], skippedExamples: [] };
-
-  const sample = lines.slice(0, Math.min(5, lines.length)).join("\n");
-  const counts: Record<string, number> = {
-    "\t": (sample.match(/\t/g) || []).length,
-    ",": (sample.match(/,/g) || []).length,
-    ";": (sample.match(/;/g) || []).length,
+import { useState } from 'react';
+import { Upload, FileJson } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { normalizeDataset, parseGeneList, sampleSetWarning } from '@/lib/ingestion';
+import type { ParsedList } from '@/lib/ingestion';
+import type { UploadedData } from '@/data/sampleData';
+import type { ParseStats } from '@/contexts/GeneDataContext';
+interface Props { onDataLoaded: (data: UploadedData, stats: ParseStats) => void; onLoadDemo: () => void }
+const UploadArea = ({ onDataLoaded, onLoadDemo }: Props) => {
+  const [error, setError] = useState<string | null>(null), [dragOver, setDragOver] = useState(false);
+  const [pending, setPending] = useState<{ text: string; name: string; parsed: ParsedList } | null>(null);
+  const acceptList = (parsed: ParsedList, name: string) => {
+    if (!parsed.genes.length) throw new Error('No valid gene symbols in the selected column.');
+    onDataLoaded({ genes: parsed.genes, expressions: [] }, { ...parsed, parsedUnique: new Set(parsed.genes.map(g => g.toUpperCase())).size, parsedRows: parsed.genes.length, source: 'file', fileName: name, warnings: parsed.warnings, columnInfo: `${parsed.delimiter === '\t' ? 'TAB' : parsed.delimiter === '\n' ? 'Single column' : parsed.delimiter} · ${parsed.labels[parsed.column]}` });
+    setPending(null);
   };
-  let delim: string | null = null;
-  if (counts["\t"] > 0) delim = "\t";
-  else if (counts[","] > 0) delim = ",";
-  else if (counts[";"] > 0) delim = ";";
-
-  let geneCol = 0;
-  let startIdx = 0;
-  let detectedBy = "single column";
-
-  if (delim) {
-    const headerCells = lines[0].split(delim).map((c) => c.trim().replace(/^["']|["']$/g, ""));
-    const headerLower = headerCells.map((c) => c.toLowerCase());
-    const headerHit = headerLower.findIndex((c) => HEADER_LABELS.includes(c));
-    const looksLikeHeader = headerHit >= 0 || headerLower.every((c) => !isValidSymbol(c));
-
-    if (headerHit >= 0) {
-      geneCol = headerHit;
-      startIdx = 1;
-      detectedBy = `header "${headerCells[headerHit]}" (column ${headerHit + 1})`;
-    } else {
-      const dataLines = looksLikeHeader ? lines.slice(1) : lines;
-      const colCount = lines[0].split(delim).length;
-      let bestCol = 0;
-      let bestScore = -1;
-      for (let c = 0; c < colCount; c++) {
-        const valid = dataLines.filter((l) =>
-          isValidSymbol((l.split(delim!)[c] ?? "").trim().replace(/^["']|["']$/g, ""))
-        ).length;
-        if (valid > bestScore) { bestScore = valid; bestCol = c; }
-      }
-      geneCol = bestCol;
-      startIdx = looksLikeHeader ? 1 : 0;
-      detectedBy = `auto-detected column ${bestCol + 1} (no recognized header)`;
-      if (!looksLikeHeader) warnings.push("No header row detected — first row treated as data.");
-    }
-
-    info.push(
-      `Delimiter: ${delim === "\t" ? "TAB" : delim === "," ? "comma" : "semicolon"}. Gene column: ${detectedBy}.`
-    );
-
-    const colCount = lines[0].split(delim).length;
-    if (colCount > 1) {
-      const dataLines = lines.slice(startIdx);
-      const scores = Array.from({ length: colCount }, (_, c) =>
-        dataLines.filter((l) =>
-          isValidSymbol((l.split(delim!)[c] ?? "").trim().replace(/^["']|["']$/g, ""))
-        ).length
-      );
-      const max = Math.max(...scores);
-      const bestCols = scores.map((s, i) => (s === max ? i : -1)).filter((i) => i >= 0);
-      if (max > scores[geneCol] && bestCols.length === 1) {
-        warnings.push(
-          `Column ${bestCols[0] + 1} has more gene-like values (${max}) than the selected column ${geneCol + 1} (${scores[geneCol]}). Wrong header label?`
-        );
-      }
-    }
-  } else {
-    info.push("Delimiter: none (treating each line as a single gene symbol).");
-  }
-
-  const seen = new Set<string>();
-  const genes: string[] = [];
-  let skipped = 0;
-  let duplicates = 0;
-  const skippedExamples: string[] = [];
-  const duplicateExamples: string[] = [];
-  for (let i = startIdx; i < lines.length; i++) {
-    const raw = delim ? (lines[i].split(delim)[geneCol] ?? "") : lines[i];
-    const t = raw.trim().replace(/^["']|["']$/g, "");
-    if (!isValidSymbol(t)) {
-      skipped++;
-      if (t && skippedExamples.length < 3) skippedExamples.push(t);
-      continue;
-    }
-    const upper = t.toUpperCase();
-    if (seen.has(upper)) {
-      duplicates++;
-      if (duplicateExamples.length < 3) duplicateExamples.push(upper);
-      continue;
-    }
-    seen.add(upper);
-    genes.push(upper);
-  }
-  const totalRows = lines.length - startIdx;
-  info.push(`Parsed ${genes.length} unique gene symbol${genes.length !== 1 ? "s" : ""} from ${totalRows} data row${totalRows !== 1 ? "s" : ""}.`);
-  if (duplicates > 0) {
-    warnings.push(
-      `${duplicates} duplicate symbol${duplicates !== 1 ? "s" : ""} merged (case-insensitive)${duplicateExamples.length ? `: ${duplicateExamples.join(", ")}${duplicates > duplicateExamples.length ? "…" : ""}` : ""}.`
-    );
-  }
-  if (skipped > 0) {
-    warnings.push(
-      `${skipped} row${skipped !== 1 ? "s" : ""} skipped as non-HGNC tokens${skippedExamples.length ? `: ${skippedExamples.map(s => `"${s}"`).join(", ")}${skipped > skippedExamples.length ? "…" : ""}` : ""}.`
-    );
-  }
-
-  if (genes.length === 0) {
-    warnings.push("No valid gene symbols found. Check delimiter and column selection.");
-  }
-
-  return { genes, warnings, info, totalRows: lines.length - startIdx, duplicates, skipped, duplicateExamples, skippedExamples };
-};
-
-const UploadArea = ({ onDataLoaded, onLoadDemo }: UploadAreaProps) => {
-  const [dragOver, setDragOver] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [info, setInfo] = useState<string[]>([]);
-
-  const parseFile = useCallback((file: File) => {
-    setError(null);
-    setWarnings([]);
-    setInfo([]);
-    setFileName(file.name);
-    const reader = new FileReader();
-    const isJson = file.name.toLowerCase().endsWith(".json");
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (isJson) {
-        try {
-          const json = JSON.parse(text);
-          if (!json.genes || !Array.isArray(json.genes)) {
-            setError("JSON must contain a 'genes' array.");
-            return;
-          }
-          if (!json.expressions || !Array.isArray(json.expressions)) {
-            setError("JSON must contain an 'expressions' array.");
-            return;
-          }
-          const normalized = normalizeUploadedData(json);
-          onDataLoaded(normalized, {
-            totalRows: Array.isArray(json.genes) ? json.genes.length : normalized.genes.length,
-            parsedUnique: normalized.genes.length,
-            duplicates: 0,
-            skipped: 0,
-            duplicateExamples: [],
-            skippedExamples: [],
-            source: "file",
-            fileName: file.name,
-          });
-        } catch {
-          setError("Invalid JSON file. Please check the format.");
-        }
+  const read = async (file: File) => {
+    setError(null); setPending(null);
+    try {
+      const text = await file.text();
+      if (file.name.toLowerCase().endsWith('.json')) {
+        const data = normalizeDataset(JSON.parse(text) as unknown);
+        const distinct = new Set(data.genes.map(g => g.toUpperCase())).size;
+        const warnings = [sampleSetWarning(data), data.genes.length > distinct ? `${data.genes.length - distinct} repeated symbols retained as separate rows.` : null].filter((v): v is string => Boolean(v));
+        onDataLoaded(data, { totalRows: data.genes.length, parsedUnique: distinct, parsedRows: data.genes.length, duplicates: data.genes.length - distinct, skipped: 0, duplicateExamples: [], skippedExamples: [], source: 'file', fileName: file.name, warnings });
       } else {
-        const result = parseGeneList(text);
-        setInfo(result.info);
-        setWarnings(result.warnings);
-        if (result.genes.length === 0) {
-          setError("No valid gene symbols found in file.");
-          return;
-        }
-        onDataLoaded({
-          genes: result.genes,
-          expressions: result.genes.map((g) => ({ gene: g, values: {} })),
-        }, {
-          totalRows: result.totalRows,
-          parsedUnique: result.genes.length,
-          duplicates: result.duplicates,
-          skipped: result.skipped,
-          duplicateExamples: result.duplicateExamples,
-          skippedExamples: result.skippedExamples,
-          source: "file",
-          fileName: file.name,
-        });
+        const parsed = parseGeneList(text);
+        if (parsed.ambiguous) setPending({ text, name: file.name, parsed }); else acceptList(parsed, file.name);
       }
-    };
-    reader.readAsText(file);
-  }, [onDataLoaded]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) parseFile(file);
-  }, [parseFile]);
-
-  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) parseFile(file);
-  }, [parseFile]);
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div
-        className={`upload-zone cursor-pointer ${dragOver ? "upload-zone-active" : ""}`}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => document.getElementById("file-input")?.click()}
-      >
-        <label htmlFor="file-input" className="sr-only">Upload gene expression JSON or gene list (TXT/CSV) file</label>
-        <input id="file-input" type="file" accept=".json,.txt,.csv,.tsv,text/plain,text/csv" className="hidden" onChange={handleFileInput} aria-label="Upload gene expression JSON or gene list file" />
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-            <Upload className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <p className="text-base font-medium text-foreground">
-              Drop your file here or click to browse
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              <span className="font-medium">JSON</span> with expression data, or <span className="font-medium">TXT/CSV</span> with one gene symbol per line
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-lg px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {info.length > 0 && !error && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-xs text-foreground space-y-1">
-          {info.map((m, i) => <div key={i}>{m}</div>)}
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="bg-warning/10 border border-warning/40 rounded-lg px-4 py-3 text-xs text-foreground space-y-1.5">
-          {warnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-warning" />
-              <span>{w}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {fileName && !error && (
-        <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle2 className="h-4 w-4" />
-          <span>Loaded: <span className="font-mono">{fileName}</span></span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <Button variant="outline" className="w-full gap-2" onClick={onLoadDemo}>
-        <FileJson className="h-4 w-4" />
-        Load Demo Dataset (12 cancer genes, 8 samples)
-      </Button>
+    } catch (e) { setError(e instanceof Error ? e.message : 'Unable to read this file.'); }
+  };
+  const updateColumn = (column: number, hasHeader: boolean) => {
+    if (!pending) return;
+    try { setPending({ ...pending, parsed: parseGeneList(pending.text, column, hasHeader) }); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Unable to parse column.'); }
+  };
+  return <div className="space-y-6 animate-fade-in">
+    <div className={`upload-zone cursor-pointer ${dragOver ? 'upload-zone-active' : ''}`} onDragOver={e => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={e => { e.preventDefault(); setDragOver(false); const file = e.dataTransfer.files[0]; if (file) void read(file); }}>
+      <label htmlFor="file-input" className="flex flex-col items-center gap-3 cursor-pointer">
+        <Upload className="h-8 w-8 text-primary" />
+        <span className="text-base font-medium">Drop your file here or click to browse</span>
+        <span className="text-sm text-muted-foreground">JSON expression data · TXT, CSV or TSV gene lists</span>
+      </label>
+      <input id="file-input" type="file" accept=".json,.txt,.csv,.tsv" className="hidden" aria-label="Upload gene expression JSON or gene list file" onChange={e => { const file = e.target.files?.[0]; if (file) void read(file); e.target.value = ''; }} />
     </div>
-  );
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {pending && <section className="border rounded-lg p-4 space-y-3">
+      <h2 className="font-semibold">Confirm gene column</h2>
+      <Select value={String(pending.parsed.column)} onValueChange={v => updateColumn(Number(v), pending.parsed.hasHeader)}><SelectTrigger aria-label="Gene column"><SelectValue /></SelectTrigger><SelectContent>{pending.parsed.labels.map((label, i) => <SelectItem key={i} value={String(i)}>{label} (column {i + 1})</SelectItem>)}</SelectContent></Select>
+      <label className="flex items-center gap-2 text-sm"><Checkbox checked={pending.parsed.hasHeader} onCheckedChange={v => updateColumn(pending.parsed.column, v === true)} />First row is a header</label>
+      <p className="font-mono text-sm break-words">{pending.parsed.genes.slice(0, 12).join(', ') || 'No valid gene symbols'}</p>
+      <Button onClick={() => { try { acceptList(pending.parsed, pending.name); } catch (e) { setError(e instanceof Error ? e.message : 'Invalid column'); } }}>Use this column</Button>
+    </section>}
+    <Button variant="outline" className="w-full gap-2" onClick={onLoadDemo}><FileJson className="h-4 w-4" />Load Demo Dataset (12 cancer genes, 8 samples)</Button>
+  </div>;
 };
-
 export default UploadArea;

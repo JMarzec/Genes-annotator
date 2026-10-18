@@ -1,3 +1,5 @@
+import { ROLE_STYLES } from "@/lib/roles";
+import { useGeneData } from "@/contexts/GeneDataContext";
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUpDown, Search, ExternalLink, Shield, Pill, Filter } from "lucide-react";
@@ -9,34 +11,14 @@ interface GeneTableProps {
   genes: GeneAnnotation[];
 }
 
-const ROLE_STYLES: Record<GeneRole, string> = {
-  Oncogene: "bg-oncogene/15 text-oncogene",
-  "Tumor Suppressor": "bg-tumor-suppressor/15 text-tumor-suppressor",
-  Kinase: "bg-kinase/15 text-kinase",
-  "DNA Repair": "bg-dna-repair/15 text-dna-repair",
-  TF: "bg-tf/15 text-tf",
-  Immune: "bg-immune/15 text-immune",
-  Unknown: "bg-unknown/15 text-unknown",
-};
-
 type SortKey = "symbol" | "role" | "mean" | "outlierPct";
 type SortDir = "asc" | "desc";
 
 const GeneTable = ({ genes }: GeneTableProps) => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("symbol");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [roleFilter, setRoleFilter] = useState<GeneRole | "All">("All");
-
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  };
+  const { tableSearch: search, setTableSearch: setSearch, tableRole: roleFilter, setTableRole: setRoleFilter, tableSort, setTableSort } = useGeneData();
+  const sortKey = tableSort.key, sortDir = tableSort.direction;
+  const toggleSort = (key: SortKey) => setTableSort(prev => ({ key, direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc" }));
 
   const roles = useMemo(() => {
     const set = new Set(genes.map(g => g.role));
@@ -69,13 +51,13 @@ const GeneTable = ({ genes }: GeneTableProps) => {
   }, [genes, search, sortKey, sortDir, roleFilter]);
 
   const SortHeader = ({ label, sortKeyName }: { label: string; sortKeyName: SortKey }) => (
-    <button
+    <Button variant="ghost" size="sm"
       onClick={() => toggleSort(sortKeyName)}
       className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
     >
       {label}
       <ArrowUpDown className={`h-3 w-3 ${sortKey === sortKeyName ? "text-primary" : ""}`} />
-    </button>
+    </Button>
   );
 
   return (
@@ -95,7 +77,7 @@ const GeneTable = ({ genes }: GeneTableProps) => {
           <Filter className="h-4 w-4 text-muted-foreground" />
           <div className="flex gap-1 flex-wrap">
             {roles.map(role => (
-              <button
+              <Button variant="ghost" size="sm"
                 key={role}
                 onClick={() => setRoleFilter(role)}
                 className={`data-chip transition-colors ${
@@ -105,7 +87,7 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                 }`}
               >
                 {role}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -129,13 +111,13 @@ const GeneTable = ({ genes }: GeneTableProps) => {
             <tbody>
               {filtered.map((gene, i) => (
                 <tr
-                  key={gene.symbol}
+                  key={gene.rowId ?? i}
                   className={`border-b last:border-0 hover:bg-muted/50 transition-colors ${i % 2 === 0 ? "" : "bg-surface-sunken/50"}`}
                 >
                   <td className="px-4 py-3">
                     <div
                       className="cursor-pointer group"
-                      onClick={() => navigate(`/gene/${gene.symbol}`)}
+                      onClick={() => navigate(`/gene/${encodeURIComponent(gene.symbol)}?row=${encodeURIComponent(gene.rowId ?? String(i))}`)}
                     >
                       <span className="gene-symbol text-sm group-hover:underline">{gene.symbol}</span>
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 max-w-[240px]">{gene.description.split('.')[0]}</p>
@@ -154,6 +136,8 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
                     <div className="flex gap-1.5 flex-wrap">
+                      {gene.sourceStatus?.civic === "unavailable" && <span className="text-xs text-warning">CIViC unavailable</span>}
+                      {gene.sourceStatus?.dgidb === "unavailable" && <span className="text-xs text-warning">DGIdb unavailable</span>}
                       {(gene.civicEvidenceCount ?? 0) > 0 ? (
                         <a
                           href={`https://civicdb.org/links/entrez_name/${gene.symbol}`}
@@ -175,16 +159,16 @@ const GeneTable = ({ genes }: GeneTableProps) => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="data-chip bg-accent/15 text-accent hover:bg-accent/25"
-                          title={gene.dgidbDrugs!.slice(0, 10).join(", ") + (gene.dgidbDrugs!.length > 10 ? "…" : "")}
+                          title={(gene.dgidbDrugs ?? []).slice(0, 10).join(", ") + ((gene.dgidbDrugs ?? []).length > 10 ? "…" : "")}
                         >
-                          <Pill className="h-3 w-3 mr-1" />{gene.dgidbDrugs!.length} drugs
+                          <Pill className="h-3 w-3 mr-1" />{(gene.dgidbDrugs ?? []).length} drugs
                         </a>
                       ) : gene.dgidbInteractions && (
                         <span className="data-chip bg-accent/15 text-accent" title="DGIdb interactions (curated)">
                           <Pill className="h-3 w-3 mr-1" />DGIdb
                         </span>
                       )}
-                      {gene.liveFetched && !gene.civicEvidenceCount && !gene.dgidbDrugs?.length && (
+                      {gene.liveFetched && !gene.civicEvidence && !gene.dgidbInteractions && gene.sourceStatus?.civic === "success" && gene.sourceStatus?.dgidb === "success" && (
                         <span className="text-xs text-muted-foreground">No signals</span>
                       )}
                     </div>

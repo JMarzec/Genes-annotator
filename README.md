@@ -1,4 +1,4 @@
-# Genes Annotator
+# Gene Annotator
 
 **A browser-based gene annotation and clinical evidence explorer for cancer genomics research.**
 
@@ -31,7 +31,7 @@ Upload your own gene expression data or explore a built-in demo dataset of 12 we
 | **Gene Annotation Table** | Sortable, filterable table with role badges and expression stats |
 | **Gene Detail View** | Tabbed layout: Summary, Clinical Evidence, Druggability, Expression Context |
 | **Expression Charts** | Per-gene bar charts with mean reference line (Recharts) |
-| **Report Builder** | Select genes, toggle fields, export as CSV or JSON |
+| **Report Builder** | Select genes, toggle fields, export CSV/JSON, or download a complete interactive HTML report |
 | **Schema Preview** | Instant preview of uploaded data structure |
 | **External Links** | Direct links to GeneCards, NCBI, OncoKB, CIViC, DGIdb |
 
@@ -43,8 +43,8 @@ Requires [Node.js](https://nodejs.org/) (v18+) and npm.
 
 ```bash
 # Clone the repository
-git clone <YOUR_GIT_URL>
-cd accelbio-genes-annotator
+# Clone this repository using the URL from its GitHub Code menu,
+# then open the cloned folder.
 
 # Install dependencies
 npm install
@@ -60,7 +60,9 @@ npm run build
 
 ## 📂 Expected Input File Format
 
-The app accepts a **JSON file** with two top-level keys:
+The app accepts **TXT, CSV, TSV gene lists** or a **JSON file** with two top-level keys. Ambiguous columns must be confirmed before loading; CSV quoting and single-column headers are supported. Repeated symbols remain separate rows, and uploaded names are preserved. JSON measurement values must be finite numbers. Duplicate gene occurrences require one expression record each or none. Differing sample sets are flagged.
+
+Outliers use two-sided Tukey fences (Q1 − 1.5 × IQR and Q3 + 1.5 × IQR), with interpolated quartiles.
 
 ### Format A — `values` object (recommended)
 
@@ -198,3 +200,18 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 ## 🔗 Powered by [AccelBio](https://accelbio.pt/)
+
+## Agent connections and reliability
+
+Use the app’s **Connect an AI assistant** page to connect via OAuth. The remote catalog includes `lookup_gene` and `lookup_genes_batch` (up to 40 rows). Source availability is explicit: unavailable counts are null, not zero. Alias resolution is shared with browser lookups; ambiguous aliases remain unresolved. MCP changes require republishing the app.
+
+Key modules:
+- `src/lib/ingestion.ts`: validated JSON and delimited file parsing.
+- `src/lib/geneApis.ts`: shared browser/MCP public lookups, bounded concurrency and cancellation.
+- `src/lib/cohort-statistics.ts`: confirmed coverage and unique gene–drug pairs.
+- `src/lib/html-report.ts` and `download.ts`: complete report and CSV downloads.
+- `src/contexts/GeneDataContext.tsx`: cohort identity, lookup lifecycle, persistent selection/filter state.
+- `src/pages/Login.tsx`, `OAuthConsent.tsx`, `Connect.tsx`: sign-in and agent consent.
+- `src/lib/mcp/`: authored tools; `supabase/functions/mcp/` is generated and must not be edited.
+
+Run `npm test` for regressions and `npm run lint` for source quality checks.

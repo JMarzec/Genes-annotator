@@ -8,11 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const MCP_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mcp`;
 
 const Connect = () => {
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
-    await navigator.clipboard.writeText(MCP_URL);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try { await navigator.clipboard.writeText(MCP_URL); setCopyError(null); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { setCopyError("Unable to copy. Select and copy the server address above."); }
   };
 
   return (
@@ -56,6 +56,7 @@ const Connect = () => {
               <span className="ml-1.5">{copied ? "Copied" : "Copy"}</span>
             </Button>
           </div>
+          {copyError && <p role="alert" className="mt-2 text-sm text-destructive">{copyError}</p>}
         </section>
 
         <section>

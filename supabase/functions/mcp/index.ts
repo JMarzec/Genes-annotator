@@ -3,162 +3,223 @@
 // supabase function: mcp
 // Bundled from src/lib/mcp/index.ts by @lovable.dev/mcp-js.
 // src/lib/mcp/index.ts
-import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@0.23.0";
+import { auth, defineMcp } from "npm:@lovable.dev/mcp-js@3.1.1";
 
 // src/lib/mcp/tools/lookup-gene.ts
-import { defineTool } from "npm:@lovable.dev/mcp-js@0.23.0";
+import { defineTool } from "npm:@lovable.dev/mcp-js@3.1.1";
 import { z } from "npm:zod@^4.4.3";
+
+// src/lib/geneApis.ts
 var CIVIC_URL = "https://civicdb.org/api/graphql";
 var DGIDB_URL = "https://dgidb.org/api/graphql";
 var MYGENE_URL = "https://mygene.info/v3/query";
-async function gql(url, query, variables) {
+var chunk = (a, size) => Array.from({ length: Math.ceil(a.length / size) }, (_, i) => a.slice(i * size, (i + 1) * size));
+async function boundedMap(items, fn, concurrency = 4) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }));
+  return results;
+}
+async function request(url, init, signal) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  const timer = setTimeout(abort, 15e3);
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables })
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.errors) return null;
-    return json.data;
-  } catch {
-    return null;
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    if (!response.ok) throw new Error(`Source returned ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 }
+async function gql(url, query, variables, signal) {
+  const json = await request(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, variables }) }, signal);
+  if (json.errors || !json.data) throw new Error("Source query failed");
+  return json.data;
+}
+var inferRole = (text) => {
+  const t = text.toLowerCase();
+  if (/kinase/.test(t)) return "Kinase";
+  if (/dna repair|homologous recombination|mismatch repair|repair associated|brca/.test(t)) return "DNA Repair";
+  if (/immune|cytokine|chemokine|interleukin|hla|antigen presentation/.test(t)) return "Immune";
+  if (/transcription factor|transcriptional regulator|bhlh|zinc finger/.test(t)) return "TF";
+  if (/tumou?r suppressor/.test(t)) return "Tumor Suppressor";
+  if (/oncogene|proto-oncogene/.test(t)) return "Oncogene";
+  return "Unknown";
+};
+function selectMetadataHit(hits, symbol) {
+  const key = symbol.toUpperCase();
+  const exact = hits.find((h) => h.symbol?.toUpperCase() === key);
+  if (exact) return { hit: exact, resolution: "exact" };
+  const candidates = hits.filter((h) => (Array.isArray(h.alias) ? h.alias : h.alias ? [h.alias] : []).some((a) => a.toUpperCase() === key));
+  const distinct = new Map(candidates.filter((h) => h.symbol).map((h) => [h.symbol?.toUpperCase(), h]));
+  if (distinct.size > 1) return { resolution: "ambiguous" };
+  const hit = [...distinct.values()][0];
+  return { hit, resolution: hit ? "alias" : "not-found" };
+}
+async function metadataForSymbol(symbol, signal) {
+  try {
+    const fields = "symbol,name,summary,entrezgene,ensembl.gene,type_of_gene,alias";
+    const term = `"${symbol.replace(/["\\]/g, "")}"`;
+    const query = async (q) => {
+      const params = new URLSearchParams({ q, species: "human", fields, size: "100" });
+      const json = await request(`${MYGENE_URL}?${params}`, {}, signal);
+      return { hits: json.hits ?? [], truncated: (json.total ?? 0) > (json.hits?.length ?? 0) };
+    };
+    const exact = await query(`symbol:${term}`);
+    const exactHit = exact.hits.find((h) => h.symbol?.toUpperCase() === symbol.toUpperCase());
+    if (exactHit) return { hit: exactHit, resolution: "exact", status: "success" };
+    const aliases = await query(`alias:${term}`);
+    const selected = selectMetadataHit(aliases.hits, symbol);
+    return { ...selected, resolution: aliases.truncated ? "ambiguous" : selected.resolution, hit: aliases.truncated ? void 0 : selected.hit, status: "success" };
+  } catch {
+    return { hit: void 0, resolution: "unavailable", status: "unavailable" };
+  }
+}
+async function fetchLiveSignals(symbols, signal) {
+  const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()))];
+  const metadataResults = await boundedMap(unique, (s) => metadataForSymbol(s, signal), 6);
+  if (signal?.aborted) throw new DOMException("Lookup cancelled", "AbortError");
+  const metadata = new Map(unique.map((s, i) => [s, metadataResults[i]]));
+  const canonical = [...new Set(unique.filter((s) => metadata.get(s)?.resolution !== "ambiguous").map((s) => metadata.get(s)?.hit?.symbol?.toUpperCase() ?? s))];
+  const civic = /* @__PURE__ */ new Map(), dgidb = /* @__PURE__ */ new Map();
+  const civicStatus = /* @__PURE__ */ new Map(), dgidbStatus = /* @__PURE__ */ new Map();
+  await Promise.all([
+    boundedMap(chunk(canonical, 40), async (batch) => {
+      try {
+        const data = await gql(CIVIC_URL, `query ($s: [String!]) { genes(entrezSymbols: $s, first: 200) { nodes { name fullName description entrezId stats { evidenceItemCount } } } }`, { s: batch }, signal);
+        data.genes.nodes.forEach((n) => civic.set(n.name.toUpperCase(), n));
+        batch.forEach((s) => civicStatus.set(s, "success"));
+      } catch {
+        batch.forEach((s) => civicStatus.set(s, "unavailable"));
+      }
+    }),
+    boundedMap(chunk(canonical, 40), async (batch) => {
+      try {
+        const data = await gql(DGIDB_URL, `query ($n: [String!]!) { genes(names: $n) { nodes { name longName geneCategories { name } interactions { drug { name } } } } }`, { n: batch }, signal);
+        data.genes.nodes.forEach((n) => dgidb.set(n.name.toUpperCase(), n));
+        batch.forEach((s) => dgidbStatus.set(s, "success"));
+      } catch {
+        batch.forEach((s) => dgidbStatus.set(s, "unavailable"));
+      }
+    })
+  ]);
+  if (signal?.aborted) throw new DOMException("Lookup cancelled", "AbortError");
+  return new Map(unique.map((s) => {
+    const meta = metadata.get(s), hit = meta?.hit, key = hit?.symbol?.toUpperCase() ?? s;
+    const c = civic.get(key), d = dgidb.get(key);
+    const drugs = [...new Set((d?.interactions ?? []).map((i) => i.drug.name).filter(Boolean))];
+    const categories = [...new Set((d?.geneCategories ?? []).map((c2) => c2.name))];
+    const ensembl = Array.isArray(hit?.ensembl) ? hit.ensembl.find((e) => e.gene)?.gene : hit?.ensembl?.gene;
+    const entry = {
+      civicEvidenceCount: c?.stats.evidenceItemCount ?? 0,
+      dgidbDrugs: drugs,
+      entrezId: hit?.entrezgene ? String(hit.entrezgene) : c?.entrezId ? String(c.entrezId) : void 0,
+      ensemblId: ensembl,
+      officialSymbol: hit?.symbol,
+      fullName: hit?.name ?? c?.fullName ?? d?.longName,
+      description: hit?.summary ?? c?.description,
+      geneType: hit?.type_of_gene,
+      metadataFound: Boolean(hit),
+      dgidbCategories: categories,
+      inferredRole: inferRole([hit?.name, c?.fullName, d?.longName, ...categories].join(" ")),
+      resolution: meta?.resolution ?? "unavailable",
+      sourceStatus: { civic: civicStatus.get(key) ?? "unavailable", dgidb: dgidbStatus.get(key) ?? "unavailable", metadata: meta?.status ?? "unavailable" },
+      fetched: true
+    };
+    return [s, entry];
+  }));
+}
+
+// src/lib/mcp/tools/lookup-gene.ts
+var symbolSchema = z.string().trim().regex(/^(?=.*[A-Za-z])[A-Za-z0-9._-]{1,40}$/, "Use a nonempty human gene symbol.");
 var lookup_gene_default = defineTool({
   name: "lookup_gene",
   title: "Look up gene annotations",
-  description: "Fetch cancer-focused annotations for a human gene symbol (HGNC). Returns metadata (name, Entrez/Ensembl IDs, summary), CIViC clinical-evidence count, and DGIdb drug interactions.",
-  inputSchema: {
-    symbol: z.string().min(1).describe("HGNC gene symbol, e.g. TP53, BRCA1, EGFR.")
-  },
+  description: "Fetch human gene metadata, CIViC evidence and complete DGIdb drug lists, with explicit source availability and alias resolution.",
+  inputSchema: { symbol: symbolSchema.describe("HGNC gene symbol, e.g. TP53, BRCA1, EGFR.") },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-  handler: async ({ symbol }) => {
-    const sym = symbol.trim().toUpperCase();
-    const [civic, dgidb, mygeneRes] = await Promise.all([
-      gql(
-        CIVIC_URL,
-        `query ($s: [String!]) { genes(entrezSymbols: $s, first: 5) { nodes { name fullName description entrezId stats { evidenceItemCount } } } }`,
-        { s: [sym] }
-      ),
-      gql(
-        DGIDB_URL,
-        `query ($n: [String!]!) { genes(names: $n) { nodes { name longName geneCategories { name } interactions { drug { name } } } } }`,
-        { n: [sym] }
-      ),
-      fetch(
-        `${MYGENE_URL}?q=symbol:"${sym}"&species=human&fields=symbol,name,summary,entrezgene,ensembl.gene,type_of_gene&size=1`
-      ).then((r) => r.ok ? r.json() : null).catch(() => null)
-    ]);
-    const civicNode = civic?.genes.nodes.find((n) => n.name.toUpperCase() === sym) ?? civic?.genes.nodes[0];
-    const dgidbNode = dgidb?.genes.nodes.find((n) => n.name.toUpperCase() === sym) ?? dgidb?.genes.nodes[0];
-    const mygeneHit = mygeneRes?.hits?.[0];
-    const drugs = Array.from(new Set((dgidbNode?.interactions ?? []).map((i) => i.drug.name).filter(Boolean)));
-    const categories = Array.from(new Set((dgidbNode?.geneCategories ?? []).map((c) => c.name).filter(Boolean)));
-    const ensemblId = mygeneHit?.ensembl && (Array.isArray(mygeneHit.ensembl) ? mygeneHit.ensembl[0]?.gene : mygeneHit.ensembl.gene);
+  handler: async ({ symbol }, ctx) => {
+    const sym = symbol.toUpperCase();
+    const signals = (await fetchLiveSignals([sym], ctx.signal)).get(sym);
+    if (!signals) return { isError: true, content: [{ type: "text", text: "Gene lookup did not return a result." }] };
+    const s = signals;
     const result = {
-      symbol: sym,
-      officialSymbol: mygeneHit?.symbol ?? civicNode?.name ?? sym,
-      fullName: mygeneHit?.name ?? civicNode?.fullName ?? dgidbNode?.longName ?? null,
-      description: mygeneHit?.summary ?? civicNode?.description ?? null,
-      entrezId: mygeneHit?.entrezgene ? String(mygeneHit.entrezgene) : civicNode?.entrezId ? String(civicNode.entrezId) : null,
-      ensemblId: ensemblId ?? null,
-      geneType: mygeneHit?.type_of_gene ?? null,
-      civicEvidenceCount: civicNode?.stats.evidenceItemCount ?? 0,
-      dgidbDrugCount: drugs.length,
-      dgidbDrugs: drugs.slice(0, 50),
-      dgidbCategories: categories,
+      symbol,
+      officialSymbol: s.officialSymbol ?? null,
+      resolution: s.resolution ?? "unavailable",
+      fullName: s.fullName ?? null,
+      description: s.description ?? null,
+      entrezId: s.entrezId ?? null,
+      ensemblId: s.ensemblId ?? null,
+      geneType: s.geneType ?? null,
+      civicEvidenceCount: s.sourceStatus?.civic === "success" ? s.civicEvidenceCount : null,
+      dgidbDrugCount: s.sourceStatus?.dgidb === "success" ? s.dgidbDrugs.length : null,
+      dgidbDrugs: s.dgidbDrugs,
+      dgidbCategories: s.dgidbCategories ?? [],
+      sourceStatus: { civic: s.sourceStatus?.civic ?? "unavailable", dgidb: s.sourceStatus?.dgidb ?? "unavailable", metadata: s.sourceStatus?.metadata ?? "unavailable" },
       externalLinks: {
-        civic: civicNode ? `https://civicdb.org/genes/${civicNode.name}` : null,
-        dgidb: dgidbNode ? `https://dgidb.org/genes/${dgidbNode.name}` : null,
-        ncbi: mygeneHit?.entrezgene ? `https://www.ncbi.nlm.nih.gov/gene/${mygeneHit.entrezgene}` : null,
-        ensembl: ensemblId ? `https://www.ensembl.org/id/${ensemblId}` : null,
-        genecards: `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${sym}`
+        civic: `https://civicdb.org/links/entrez_name/${encodeURIComponent(s.officialSymbol ?? symbol)}`,
+        dgidb: `https://dgidb.org/genes/${encodeURIComponent(s.officialSymbol ?? symbol)}`,
+        ncbi: s.entrezId ? `https://www.ncbi.nlm.nih.gov/gene/${s.entrezId}` : null,
+        ensembl: s.ensemblId ? `https://www.ensembl.org/id/${s.ensemblId}` : null,
+        genecards: `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${encodeURIComponent(s.officialSymbol ?? symbol)}`
       }
     };
-    return {
-      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      structuredContent: result
-    };
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
   }
 });
 
 // src/lib/mcp/tools/lookup-genes-batch.ts
-import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@0.23.0";
+import { defineTool as defineTool2 } from "npm:@lovable.dev/mcp-js@3.1.1";
 import { z as z2 } from "npm:zod@^4.4.3";
-var CIVIC_URL2 = "https://civicdb.org/api/graphql";
-var DGIDB_URL2 = "https://dgidb.org/api/graphql";
-async function gql2(url, query, variables) {
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables })
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.errors) return null;
-    return json.data;
-  } catch {
-    return null;
-  }
-}
 var lookup_genes_batch_default = defineTool2({
   name: "lookup_genes_batch",
   title: "Look up multiple genes (compact)",
-  description: "Return compact CIViC evidence counts and DGIdb drug counts for up to 40 HGNC gene symbols in one call. Useful for triaging a cohort of genes.",
-  inputSchema: {
-    symbols: z2.array(z2.string().min(1)).min(1).max(40).describe("Up to 40 HGNC gene symbols.")
-  },
+  description: "Return compact human gene evidence and distinct drug counts for up to 40 input rows, preserving duplicates and reporting unavailable sources.",
+  inputSchema: { symbols: z2.array(z2.string().trim().regex(/^(?=.*[A-Za-z])[A-Za-z0-9._-]{1,40}$/, "Use a nonempty gene symbol.")).min(1).max(40).describe("Up to 40 HGNC gene symbols.") },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-  handler: async ({ symbols }) => {
-    const syms = Array.from(new Set(symbols.map((s) => s.trim().toUpperCase()))).filter(Boolean);
-    const [civic, dgidb] = await Promise.all([
-      gql2(
-        CIVIC_URL2,
-        `query ($s: [String!]) { genes(entrezSymbols: $s, first: 200) { nodes { name stats { evidenceItemCount } } } }`,
-        { s: syms }
-      ),
-      gql2(
-        DGIDB_URL2,
-        `query ($n: [String!]!) { genes(names: $n) { nodes { name interactions { drug { name } } } } }`,
-        { n: syms }
-      )
-    ]);
-    const civicMap = /* @__PURE__ */ new Map();
-    for (const n of civic?.genes.nodes ?? []) civicMap.set(n.name.toUpperCase(), n.stats.evidenceItemCount);
-    const dgidbMap = /* @__PURE__ */ new Map();
-    for (const n of dgidb?.genes.nodes ?? []) {
-      const drugs = new Set(n.interactions.map((i) => i.drug.name).filter(Boolean));
-      dgidbMap.set(n.name.toUpperCase(), drugs.size);
-    }
-    const results = syms.map((s) => ({
-      symbol: s,
-      civicEvidenceCount: civicMap.get(s) ?? 0,
-      dgidbDrugCount: dgidbMap.get(s) ?? 0
-    }));
-    return {
-      content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-      structuredContent: { results }
-    };
+  handler: async ({ symbols }, ctx) => {
+    const live = await fetchLiveSignals(symbols, ctx.signal);
+    const results = symbols.map((symbol, row) => {
+      const s = live.get(symbol.toUpperCase());
+      return {
+        row,
+        symbol,
+        officialSymbol: s?.officialSymbol ?? null,
+        resolution: s?.resolution ?? "unavailable",
+        civicEvidenceCount: s?.sourceStatus?.civic === "success" ? s.civicEvidenceCount : null,
+        dgidbDrugCount: s?.sourceStatus?.dgidb === "success" ? s.dgidbDrugs.length : null,
+        sourceStatus: { civic: s?.sourceStatus?.civic ?? "unavailable", dgidb: s?.sourceStatus?.dgidb ?? "unavailable", metadata: s?.sourceStatus?.metadata ?? "unavailable" }
+      };
+    });
+    return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }], structuredContent: { results } };
   }
 });
 
 // src/lib/mcp/index.ts
 var projectRef = "qjcyoccdquidylaufinc";
 var mcp_default = defineMcp({
-  name: "oncogene-annotator-mcp",
-  title: "OncoGene Annotator",
+  name: "gene-annotator",
+  title: "Gene Annotator",
   version: "0.1.0",
-  instructions: "Cancer-gene annotation tools. Use `lookup_gene` for a single HGNC symbol (full metadata + CIViC evidence + DGIdb drugs). Use `lookup_genes_batch` for compact counts across up to 40 symbols. Data comes from public sources (CIViC, DGIdb, MyGene.info) and is for research use only.",
+  instructions: "Cancer-gene annotation tools. Use `lookup_gene` for a single HGNC symbol (full metadata + CIViC evidence + DGIdb drugs). Use `lookup_genes_batch` for compact counts across up to 40 symbols. Unavailable source results are null, not zero. Preserve input rows; ambiguous aliases are unresolved. Data comes from public sources (CIViC, DGIdb, MyGene.info) and is for research use only.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
-    acceptedAudiences: "authenticated"
+    acceptedAudiences: "authenticated",
+    requireOAuthClientClaim: true
   }),
   tools: [lookup_gene_default, lookup_genes_batch_default]
 });
 
 // lovable-mcp-supabase-entry.ts
-import { createSupabaseHandler } from "npm:@lovable.dev/mcp-js@0.23.0/stacks/supabase";
+import { createSupabaseHandler } from "npm:@lovable.dev/mcp-js@3.1.1/stacks/supabase";
 Deno.serve(createSupabaseHandler(mcp_default, { functionName: "mcp" }));

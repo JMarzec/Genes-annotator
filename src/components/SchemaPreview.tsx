@@ -1,3 +1,4 @@
+import { sampleNames, sampleSetWarning } from "@/lib/ingestion";
 import type { UploadedData } from "@/data/sampleData";
 import { FileJson, Hash, Users } from "lucide-react";
 
@@ -6,8 +7,8 @@ interface SchemaPreviewProps {
 }
 
 const SchemaPreview = ({ data }: SchemaPreviewProps) => {
-  const firstExpr = data.expressions?.[0];
-  const sampleKeys = firstExpr?.values ? Object.keys(firstExpr.values) : [];
+  const sampleKeys = sampleNames(data);
+  const warning = sampleSetWarning(data);
   const sampleCount = sampleKeys.length;
 
   return (
@@ -34,6 +35,7 @@ const SchemaPreview = ({ data }: SchemaPreviewProps) => {
           <div className="text-xs text-muted-foreground mt-1">Expression rows</div>
         </div>
       </div>
+      {warning && <p className="mt-3 text-xs text-warning">{warning}</p>}
       {sampleKeys.length > 0 && (
         <div className="mt-3 text-xs text-muted-foreground">
           <span>Samples: </span>
