@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdk_version": "0.23.0",
+  "sdk_version": "3.1.1",
   "path": "/functions/v1/mcp",
   "auth": {
     "type": "oauth",
@@ -27,7 +27,7 @@
           "openWorldHint": true
         },
         "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "symbol": {
@@ -38,7 +38,8 @@
           },
           "required": [
             "symbol"
-          ]
+          ],
+          "additionalProperties": false
         },
         "outputSchema": null
       },
@@ -52,7 +53,7 @@
           "openWorldHint": true
         },
         "inputSchema": {
-          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "type": "object",
           "properties": {
             "symbols": {
@@ -68,7 +69,8 @@
           },
           "required": [
             "symbols"
-          ]
+          ],
+          "additionalProperties": false
         },
         "outputSchema": null
       }
