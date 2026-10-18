@@ -1,4 +1,5 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { ROLE_STYLES } from "@/lib/roles";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { ArrowLeft, Dna, FlaskConical, ExternalLink, Shield, Pill, Activity, TrendingUp, BarChart3, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,16 +7,6 @@ import { Button } from "@/components/ui/button";
 import { useGeneData } from "@/contexts/GeneDataContext";
 import type { GeneAnnotation } from "@/data/sampleData";
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Cell, ReferenceLine } from "recharts";
-
-const ROLE_STYLES: Record<string, string> = {
-  Oncogene: "bg-oncogene/15 text-oncogene",
-  "Tumor Suppressor": "bg-tumor-suppressor/15 text-tumor-suppressor",
-  Kinase: "bg-kinase/15 text-kinase",
-  "DNA Repair": "bg-dna-repair/15 text-dna-repair",
-  TF: "bg-tf/15 text-tf",
-  Immune: "bg-immune/15 text-immune",
-  Unknown: "bg-unknown/15 text-unknown",
-};
 
 const StatCard = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
   <div className="bg-surface-sunken rounded-lg p-4 text-center">
@@ -89,8 +80,8 @@ const SummaryTab = ({ gene }: { gene: GeneAnnotation }) => (
       <h3 className="text-sm font-semibold text-foreground mb-3">External Resources</h3>
       <div className="flex flex-wrap gap-2">
         <ExternalLinkButton href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${gene.symbol}`} label="GeneCards" icon={Dna} />
-        <ExternalLinkButton href={`https://www.ncbi.nlm.nih.gov/gene/${gene.entrezId}`} label="NCBI Gene" icon={Dna} />
-        <ExternalLinkButton href={`https://ensembl.org/Homo_sapiens/Gene/Summary?g=${gene.ensemblId}`} label="Ensembl" icon={Dna} />
+        <ExternalLinkButton href={`https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(gene.entrezId === "—" ? gene.officialSymbol ?? gene.symbol : gene.entrezId)}`} label="NCBI Gene" icon={Dna} />
+        <ExternalLinkButton href={`https://www.ensembl.org/Multi/Search/Results?q=${encodeURIComponent(gene.ensemblId === "—" ? gene.officialSymbol ?? gene.symbol : gene.ensemblId)}`} label="Ensembl" icon={Dna} />
       </div>
     </div>
   </div>
@@ -114,7 +105,7 @@ const ClinicalEvidenceTab = ({ gene }: { gene: GeneAnnotation }) => (
             <Shield className={`h-4 w-4 ${(gene.civicEvidenceCount ?? 0) > 0 ? "text-info" : "text-muted-foreground"}`} />
             <span className="text-sm font-semibold">CIViC</span>
             <span className={`ml-auto data-chip ${(gene.civicEvidenceCount ?? 0) > 0 ? "bg-info/15 text-info" : "bg-muted text-muted-foreground"}`}>
-              {gene.liveFetched ? `${gene.civicEvidenceCount ?? 0} evidence items` : (gene.civicEvidence ? "Curated" : "—")}
+              {gene.sourceStatus?.civic === "unavailable" ? "Source unavailable" : gene.liveFetched ? `${gene.civicEvidenceCount ?? 0} evidence items` : (gene.civicEvidence ? "Curated" : "—")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">Clinical Interpretation of Variants in Cancer</p>
@@ -133,17 +124,17 @@ const ClinicalEvidenceTab = ({ gene }: { gene: GeneAnnotation }) => (
             <Pill className={`h-4 w-4 ${(gene.dgidbDrugs?.length ?? 0) > 0 ? "text-accent" : "text-muted-foreground"}`} />
             <span className="text-sm font-semibold">DGIdb</span>
             <span className={`ml-auto data-chip ${(gene.dgidbDrugs?.length ?? 0) > 0 ? "bg-accent/15 text-accent" : "bg-muted text-muted-foreground"}`}>
-              {gene.liveFetched ? `${gene.dgidbDrugs?.length ?? 0} drugs` : (gene.dgidbInteractions ? "Curated" : "—")}
+              {gene.sourceStatus?.dgidb === "unavailable" ? "Source unavailable" : gene.liveFetched ? `${gene.dgidbDrugs?.length ?? 0} drugs` : (gene.dgidbInteractions ? "Curated" : "—")}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">Drug Gene Interaction Database</p>
           {(gene.dgidbDrugs?.length ?? 0) > 0 && (
             <div className="mt-3 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-              {gene.dgidbDrugs!.slice(0, 24).map((d) => (
+              {(gene.dgidbDrugs ?? []).slice(0, 24).map((d) => (
                 <span key={d} className="data-chip bg-accent/10 text-accent text-[10px] font-mono">{d}</span>
               ))}
-              {gene.dgidbDrugs!.length > 24 && (
-                <span className="text-[10px] text-muted-foreground">+{gene.dgidbDrugs!.length - 24} more</span>
+              {(gene.dgidbDrugs ?? []).length > 24 && (
+                <span className="text-[10px] text-muted-foreground">+{(gene.dgidbDrugs ?? []).length - 24} more</span>
               )}
             </div>
           )}
@@ -185,8 +176,8 @@ const DruggabilityTab = ({ gene }: { gene: GeneAnnotation }) => {
           </div>
           <div className={`rounded-lg border p-4 text-center ${gene.civicEvidence ? "border-info/30 bg-info/5" : "border-border"}`}>
             <TrendingUp className={`h-8 w-8 mx-auto mb-2 ${gene.civicEvidence ? "text-info" : "text-muted-foreground"}`} />
-            <div className="text-sm font-semibold">{gene.civicEvidence ? "Clinical Evidence" : "Pre-clinical"}</div>
-            <div className="text-xs text-muted-foreground mt-1">CIViC evidence level</div>
+            <div className="text-sm font-semibold">{gene.civicEvidence ? "Clinical Evidence" : "No confirmed evidence"}</div>
+            <div className="text-xs text-muted-foreground mt-1">CIViC evidence presence</div>
           </div>
         </div>
       </div>
@@ -232,26 +223,26 @@ const ExpressionContextTab = ({ gene, sampleValues }: { gene: GeneAnnotation; sa
             <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 60 }}>
               <XAxis
                 dataKey="sample"
-                tick={{ fontSize: 10, fill: "hsl(215 12% 50%)" }}
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                 angle={-45}
                 textAnchor="end"
                 interval={chartData.length > 30 ? Math.floor(chartData.length / 20) : 0}
               />
-              <YAxis tick={{ fontSize: 11, fill: "hsl(215 12% 50%)" }} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
               <Tooltip
                 contentStyle={{
-                  background: "hsl(0 0% 100%)",
-                  border: "1px solid hsl(214 20% 88%)",
+                  background: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
               />
-              <ReferenceLine y={mean} stroke="hsl(199 89% 48%)" strokeDasharray="4 4" label={{ value: `Mean: ${mean.toFixed(2)}`, position: "right", fontSize: 10, fill: "hsl(199 89% 48%)" }} />
+              <ReferenceLine y={mean} stroke="hsl(var(--info))" strokeDasharray="4 4" label={{ value: `Mean: ${mean.toFixed(2)}`, position: "right", fontSize: 10, fill: "hsl(var(--info))" }} />
               <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={entry.value > mean ? "hsl(199 89% 48%)" : "hsl(199 89% 48% / 0.4)"}
+                    fill={entry.value > mean ? "hsl(var(--info))" : "hsl(var(--info) / 0.4)"}
                   />
                 ))}
               </Bar>
@@ -283,11 +274,12 @@ const ExpressionContextTab = ({ gene, sampleValues }: { gene: GeneAnnotation; sa
 const GeneDetail = () => {
   const { symbol } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
-  const { data, annotations } = useGeneData();
-
-  const gene = annotations.find(a => a.symbol === symbol);
-  const expressionEntry = data?.expressions?.find(e => e.gene === symbol);
-  const sampleValues = expressionEntry?.values ?? null;
+  const { annotations } = useGeneData();
+  const [params] = useSearchParams();
+  const row = params.get("row");
+  const matches = annotations.filter(a => a.symbol === symbol);
+  const gene = row !== null ? annotations.find(a => a.rowId === row && a.symbol === symbol) : matches.length === 1 ? matches[0] : undefined;
+  const sampleValues = gene?.sampleValues ?? null;
 
   if (!gene) {
     return (
@@ -361,6 +353,8 @@ const GeneDetail = () => {
               <h1 className="text-2xl font-bold gene-symbol">{gene.symbol} — {gene.role}</h1>
               <span className={`data-chip ${ROLE_STYLES[gene.role]}`}>{gene.role}</span>
             </div>
+            {gene.officialSymbol && gene.officialSymbol.toUpperCase() !== gene.symbol.toUpperCase() && <p className="text-xs text-muted-foreground">Resolved symbol: {gene.officialSymbol} · Uploaded name preserved</p>}
+            {gene.resolution === "ambiguous" && <p role="status" className="text-xs text-warning">Ambiguous alias — no single gene identity assigned.</p>}
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{gene.description.split('.')[0]}.</p>
           </div>
         </div>
