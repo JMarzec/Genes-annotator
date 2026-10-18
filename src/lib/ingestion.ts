@@ -20,7 +20,7 @@ export function normalizeDataset(raw: unknown): UploadedData {
     const add = (sample: string, value: unknown) => {
       if (!sample.trim()) throw new Error(`Missing sample name for ${gene}.`);
       if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Invalid measurement for ${gene}, sample ${sample}: a finite number is required.`);
-      if (Object.hasOwn(values, sample)) throw new Error(`Duplicate sample ${sample} for ${gene}.`);
+      if (Object.prototype.hasOwnProperty.call(values, sample)) throw new Error(`Duplicate sample ${sample} for ${gene}.`);
       Object.defineProperty(values, sample, { value, enumerable: true, configurable: true, writable: true });
     };
     if (record(e.values)) Object.entries(e.values).forEach(([sample, value]) => add(sample, value));
