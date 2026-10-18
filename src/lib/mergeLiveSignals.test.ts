@@ -60,14 +60,15 @@ describe("mergeLiveSignals — HGNC canonicalization safety", () => {
     expect(merged[2].symbol).toBe("ERBB2");
   });
 
-  it("does adopt the official symbol when there is no collision", () => {
+  it("preserves the uploaded symbol and stores resolution separately", () => {
     const annotated = [baseAnnotation("p53")];
     const live = new Map<string, LiveSignals>([
       ["P53", baseSignal({ officialSymbol: "TP53" })],
     ]);
 
     const merged = mergeLiveSignals(annotated, live);
-    expect(merged[0].symbol).toBe("TP53");
+    expect(merged[0].symbol).toBe("p53");
+    expect(merged[0].officialSymbol).toBe("TP53");
   });
 
   it("marks every input row as liveFetched even when no live data is returned", () => {
