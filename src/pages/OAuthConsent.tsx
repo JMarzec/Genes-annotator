@@ -1,101 +1,55 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Helmet } from "react-helmet-async";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-
-// Narrow typed wrapper for the beta supabase.auth.oauth namespace.
-interface AuthorizationDetails {
-  client?: { name?: string; redirect_uris?: string[]; client_uri?: string };
-  scope?: string;
-  redirect_url?: string;
-  redirect_to?: string;
-}
-interface OAuthResult { data?: AuthorizationDetails; error?: { message: string } }
-const authOauth = (supabase.auth as unknown as {
-  oauth: {
-    getAuthorizationDetails: (id: string) => Promise<OAuthResult>;
-    approveAuthorization: (id: string) => Promise<OAuthResult>;
-    denyAuthorization: (id: string) => Promise<OAuthResult>;
-  };
-}).oauth;
-
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { supabase } from '@/integrations/supabase/client';
+import { consentDecision } from '@/lib/oauth-consent';
+import { Button } from '@/components/ui/button';
+type Details = { client: { name: string }; scope: string };
 const OAuthConsent = () => {
   const [params] = useSearchParams();
-  const authorizationId = params.get("authorization_id") ?? "";
-  const [details, setDetails] = useState<AuthorizationDetails | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
+  const authorizationId = params.get('authorization_id') ?? '';
+  const [details, setDetails] = useState<Details | null>(null), [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
-    (async () => {
-      if (!authorizationId) return setError("Missing authorization_id");
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) {
-        const next = window.location.pathname + window.location.search;
-        window.location.href = "/login?next=" + encodeURIComponent(next);
-        return;
-      }
-      const { data, error } = await authOauth.getAuthorizationDetails(authorizationId);
-      if (!active) return;
-      if (error) return setError(error.message);
-      const immediate = data?.redirect_url ?? data?.redirect_to;
-      if (immediate && !data?.client) {
-        window.location.href = immediate;
-        return;
-      }
-      setDetails(data ?? null);
-    })();
+    setDetails(null); setError(null);
+    const load = async () => {
+      try {
+        if (!authorizationId) throw new Error('Missing authorization_id');
+        const { data: sess, error: sessionError } = await supabase.auth.getSession();
+        if (!active) return;
+        if (sessionError) throw sessionError;
+        if (!sess.session) {
+          const next = window.location.pathname + window.location.search + window.location.hash;
+          window.location.assign('/login?next=' + encodeURIComponent(next)); return;
+        }
+        const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
+        if (!active) return;
+        if (error) throw error;
+        if (!data) throw new Error('Authorization request is unavailable.');
+        if ('redirect_url' in data) { window.location.assign(data.redirect_url); return; }
+        setDetails({ client: { name: data.client.name ?? 'an app' }, scope: data.scope });
+      } catch (e) { if (active) setError(e instanceof Error ? e.message : 'Cannot load this request.'); }
+    };
+    void load();
     return () => { active = false; };
   }, [authorizationId]);
-
   const decide = async (approve: boolean) => {
-    setBusy(true);
-    const { data, error } = approve
-      ? await authOauth.approveAuthorization(authorizationId)
-      : await authOauth.denyAuthorization(authorizationId);
-    if (error) { setBusy(false); return setError(error.message); }
-    const target = data?.redirect_url ?? data?.redirect_to;
-    if (!target) { setBusy(false); return setError("No redirect returned by the authorization server."); }
-    window.location.href = target;
+    setBusy(true); setError(null);
+    try { window.location.assign(await consentDecision(authorizationId, approve)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Unable to complete this decision.'); }
+    finally { setBusy(false); }
   };
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Helmet>
-        <title>Authorize connection — OncoGene Annotator</title>
-      </Helmet>
-      <div className="w-full max-w-md border rounded-lg bg-card p-6 shadow-sm">
-        {error ? (
-          <>
-            <h1 className="text-lg font-bold text-foreground mb-2">Cannot load this request</h1>
-            <p className="text-sm text-muted-foreground">{error}</p>
-          </>
-        ) : !details ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <>
-            <h1 className="text-lg font-bold text-foreground mb-1">
-              Connect {details.client?.name ?? "an app"} to OncoGene Annotator
-            </h1>
-            <p className="text-sm text-muted-foreground mb-4">
-              {details.client?.name ?? "The client"} will be able to call OncoGene Annotator's MCP tools while you are signed in.
-            </p>
-            <ul className="text-xs text-muted-foreground space-y-1 mb-6 list-disc pl-4">
-              <li>Share your basic profile and email</li>
-              <li>Call read-only gene-annotation tools (CIViC, DGIdb, MyGene)</li>
-              <li>This does not bypass this app's permissions or backend policies.</li>
-            </ul>
-            <div className="flex gap-2">
-              <Button onClick={() => decide(true)} disabled={busy} className="flex-1">Approve</Button>
-              <Button onClick={() => decide(false)} disabled={busy} variant="outline" className="flex-1">Deny</Button>
-            </div>
-          </>
-        )}
-      </div>
+  return <main className="min-h-screen bg-background flex items-center justify-center p-6">
+    <Helmet><title>Authorize connection — OncoGene Annotator</title></Helmet>
+    <div className="w-full max-w-md border rounded-lg bg-card p-6 shadow-sm">
+      {error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}
+      {!details ? <p>{error ? 'Cannot load this request' : 'Loading…'}</p> : <>
+        <h1 className="text-lg font-bold mb-2">Connect {details.client.name} to OncoGene Annotator</h1>
+        <p className="text-sm text-muted-foreground mb-4">This app can call read-only gene-annotation tools while connected to your account.</p>
+        {details.scope && <p className="text-xs text-muted-foreground mb-4">Requested permissions: {details.scope}</p>}
+        <div className="flex gap-2"><Button disabled={busy} onClick={() => void decide(true)} className="flex-1">Approve</Button><Button disabled={busy} variant="outline" onClick={() => void decide(false)} className="flex-1">Deny</Button></div>
+      </>}
     </div>
-  );
+  </main>;
 };
-
 export default OAuthConsent;
