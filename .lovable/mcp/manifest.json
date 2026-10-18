@@ -5,21 +5,22 @@
   "auth": {
     "type": "oauth",
     "issuer": "https://qjcyoccdquidylaufinc.supabase.co/auth/v1",
+    "require_oauth_client_claim": true,
     "accepted_audiences": [
       "authenticated"
     ]
   },
   "mcp": {
     "server": {
-      "name": "oncogene-annotator-mcp",
+      "name": "gene-annotator",
       "version": "0.1.0",
-      "title": "OncoGene Annotator"
+      "title": "Gene Annotator"
     },
     "tools": [
       {
         "name": "lookup_gene",
         "title": "Look up gene annotations",
-        "description": "Fetch cancer-focused annotations for a human gene symbol (HGNC). Returns metadata (name, Entrez/Ensembl IDs, summary), CIViC clinical-evidence count, and DGIdb drug interactions.",
+        "description": "Fetch human gene metadata, CIViC evidence and complete DGIdb drug lists, with explicit source availability and alias resolution.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -31,7 +32,7 @@
           "properties": {
             "symbol": {
               "type": "string",
-              "minLength": 1,
+              "pattern": "^(?=.*[A-Za-z])[A-Za-z0-9._-]{1,40}$",
               "description": "HGNC gene symbol, e.g. TP53, BRCA1, EGFR."
             }
           },
@@ -44,7 +45,7 @@
       {
         "name": "lookup_genes_batch",
         "title": "Look up multiple genes (compact)",
-        "description": "Return compact CIViC evidence counts and DGIdb drug counts for up to 40 HGNC gene symbols in one call. Useful for triaging a cohort of genes.",
+        "description": "Return compact human gene evidence and distinct drug counts for up to 40 input rows, preserving duplicates and reporting unavailable sources.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -60,7 +61,7 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "minLength": 1
+                "pattern": "^(?=.*[A-Za-z])[A-Za-z0-9._-]{1,40}$"
               },
               "description": "Up to 40 HGNC gene symbols."
             }
