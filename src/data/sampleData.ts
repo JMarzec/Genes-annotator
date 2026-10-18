@@ -8,42 +8,16 @@ export interface UploadedData {
   expressions: GeneExpression[];
 }
 
-// Alternate format: expressions as { gene, samples: [{ sampleId, value }] }
-interface AltExpression {
-  gene: string;
-  samples: { sampleId: string; value: number; [key: string]: unknown }[];
-}
-
-interface RawUploadedData {
-  genes: string[];
-  expressions: (GeneExpression | AltExpression)[];
-  [key: string]: unknown;
-}
-
-export function normalizeUploadedData(raw: RawUploadedData): UploadedData {
-  const expressions: GeneExpression[] = raw.expressions.map((expr) => {
-    // Already in { gene, values } format
-    if ('values' in expr && typeof expr.values === 'object' && expr.values !== null) {
-      return expr as GeneExpression;
-    }
-    // Alternate { gene, samples: [{ sampleId, value }] } format
-    if ('samples' in expr && Array.isArray((expr as AltExpression).samples)) {
-      const alt = expr as AltExpression;
-      const values: Record<string, number> = {};
-      alt.samples.forEach((s) => {
-        values[s.sampleId] = s.value;
-      });
-      return { gene: alt.gene, values };
-    }
-    // Fallback: empty values
-    return { gene: (expr as any).gene ?? 'unknown', values: {} };
-  });
-  return { genes: raw.genes, expressions };
-}
+export { normalizeDataset as normalizeUploadedData } from "@/lib/ingestion";
 
 export type GeneRole = "Oncogene" | "Tumor Suppressor" | "Kinase" | "DNA Repair" | "TF" | "Immune" | "Unknown";
 
 export interface GeneAnnotation {
+  rowId?: string;
+  officialSymbol?: string;
+  resolution?: "exact" | "alias" | "ambiguous" | "not-found" | "unavailable";
+  sourceStatus?: { civic: "success" | "unavailable"; dgidb: "success" | "unavailable"; metadata: "success" | "unavailable" };
+  sampleValues?: Record<string, number>;
   symbol: string;
   ensemblId: string;
   entrezId: string;
@@ -110,36 +84,35 @@ const GENE_DB: Record<string, Partial<GeneAnnotation>> = {
 
 export function computeExpressionStats(values: Record<string, number>) {
   const nums = Object.values(values);
-  if (nums.length === 0) return undefined;
+  if (!nums.length) return undefined;
+  if (nums.some(v => typeof v !== "number" || !Number.isFinite(v))) throw new Error("Expression values must be finite numbers.");
   const sorted = [...nums].sort((a, b) => a - b);
-  const mean = nums.reduce((s, v) => s + v, 0) / nums.length;
-  const median = sorted.length % 2 === 0
-    ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
-    : sorted[Math.floor(sorted.length / 2)];
-  const min = sorted[0];
-  const max = sorted[sorted.length - 1];
-  const iqr = sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)];
-  const outlierThreshold = median + 1.5 * iqr;
-  const outlierCount = nums.filter(v => v > outlierThreshold).length;
-  const outlierPct = Math.round((outlierCount / nums.length) * 100);
-  return { mean: +mean.toFixed(2), median: +median.toFixed(2), min: +min.toFixed(2), max: +max.toFixed(2), outlierPct };
+  const quantile = (p: number) => {
+    const index = (sorted.length - 1) * p, low = Math.floor(index), high = Math.ceil(index);
+    return sorted[low] + (sorted[high] - sorted[low]) * (index - low);
+  };
+  const mean = nums.reduce((sum, v) => sum + v, 0) / nums.length;
+  const q1 = quantile(0.25), q3 = quantile(0.75), iqr = q3 - q1;
+  const outlierPct = Math.round(nums.filter(v => v < q1 - 1.5 * iqr || v > q3 + 1.5 * iqr).length / nums.length * 100);
+  const round = (n: number) => Number(n.toFixed(2));
+  return { mean: round(mean), median: round(quantile(0.5)), min: sorted[0], max: sorted[sorted.length - 1], outlierPct };
 }
 
 export function annotateGenes(data: UploadedData): GeneAnnotation[] {
-  return data.genes.map(gene => {
-    const db = GENE_DB[gene] || {};
-    const expr = data.expressions.find(e => e.gene === gene);
-    const stats = expr ? computeExpressionStats(expr.values) : undefined;
+  const bySymbol = new Map<string, GeneExpression[]>();
+  data.expressions.forEach(e => bySymbol.set(e.gene, [...(bySymbol.get(e.gene) ?? []), e]));
+  const used = new Map<string, number>();
+  return data.genes.map((gene, index) => {
+    const occurrence = used.get(gene) ?? 0;
+    used.set(gene, occurrence + 1);
+    const expr = bySymbol.get(gene)?.[occurrence];
+    const db = GENE_DB[gene.toUpperCase()] || {};
     return {
-      symbol: gene,
-      ensemblId: db.ensemblId || "—",
-      entrezId: db.entrezId || "—",
-      role: db.role || "Unknown",
-      description: db.description || "No annotation available.",
-      cancerRelevance: db.cancerRelevance || "Unknown",
-      civicEvidence: db.civicEvidence || false,
-      dgidbInteractions: db.dgidbInteractions || false,
-      expressionStats: stats,
+      rowId: String(index), symbol: gene, sampleValues: expr?.values,
+      ensemblId: db.ensemblId || "—", entrezId: db.entrezId || "—", role: db.role || "Unknown",
+      description: db.description || "No annotation available.", cancerRelevance: db.cancerRelevance || "Unknown",
+      civicEvidence: db.civicEvidence || false, dgidbInteractions: db.dgidbInteractions || false,
+      expressionStats: expr ? computeExpressionStats(expr.values) : undefined,
     };
   });
 }
